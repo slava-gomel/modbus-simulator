@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: modbud_backend
+    ports:
+      - "8000:8000"   # HTTP API
+      - "1502:1502"   # Modbus TCP (нестандартный порт для запуска без root)
+    volumes:
+      - sim_data:/data
+    environment:
+      - MODBUS_PORT=1502
+      - API_PORT=8000
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: modbud_frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sim_data:
+    driver: local
+

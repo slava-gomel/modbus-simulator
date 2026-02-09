@@ -7,6 +7,7 @@
 - Вести документацию в `memory-bank` согласно правилам Cursor.
 
 **Текущее состояние (2026-02-09, Europe/Minsk):**
-- Проект только что инициализирован.
-- Кодовая база ещё не создана.
+- Реализованы backend (FastAPI + Modbus TCP через pymodbus) и базовый WEB GUI (React + Vite).
+- Настроены Dockerfile-ы для backend и frontend, а также `docker-compose.yml` для совместного запуска.
+- Добавлены базовые автотесты backend и обновлена документация в `README.md`.
 
