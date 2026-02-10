@@ -1,12 +1,13 @@
 ## Progress
 
-**Что уже работает:**
-- FastAPI + Modbus TCP (pymodbus 3.6.x): функции 01/02/03/04/05/06 и 15/16 (множественная запись).
-- HTTP API: `/health`, `/api/config`, `/api/state/{kind}` (GET/PUT), `/api/state/{kind}/batch` (PUT), `/api/server/status`, `/api/server/start`, `/api/server/stop`.
-- Файловое хранилище: `config.yaml`, `state.json` (автозагрузка и сохранение при записи).
-- React SPA: конфигурация, регистры (одиночная и пакетная запись), блок «Modbus сервер» — отображение статуса (запущен/остановлен), кнопки Запустить/Остановить/Обновить статус.
-- Docker Compose (backend, frontend, volume `sim_data`), локальный запуск тестов: `pip install -e .[dev]`, `pytest`.
+**Реализовано:**
+- Modbus TCP (pymodbus 3.6.x): 01–06, 15/16; запуск/остановка сервера через API; при ошибке «порт занят» — понятный ответ в API.
+- API: `/health`, `/api/config`, `/api/state/{kind}` (GET/PUT), `/api/state/{kind}/batch`, `/api/server/status`, `/api/server/start`, `/api/server/stop`, `/api/profiles` (GET/POST), `/api/profiles/{slug}/load`, DELETE профиля.
+- Хранилище: `config.yaml`, `state.json`, каталог `profiles/` (YAML).
+- GUI: конфигурация, регистры (одиночная и batch запись, пресеты «Заполнить нулями», «Случайные значения»), Modbus-сервер (статус с автообновлением, Запустить/Остановить), профили (сохранение/загрузка/удаление), при включённой авторизацией — форма входа, журнал событий с цветами по типам (запуск/остановка, ошибки, Modbus‑операции, HEX‑трейс), свежие записи сверху.
+- Авторизация: опциональная (env `GUI_USER`/`GUI_PASSWORD`); при заданных — Basic Auth для API и форма логина в SPA.
+- Тесты: health, state, batch, server, profiles; `pytest` с временным DATA_DIR.
+- README: запуск, порты, профили, пресеты, тесты.
 
-**Что можно доработать:**
-- Профили конфигурации (несколько YAML), расширенные тесты и e2e, при необходимости — простая авторизация для GUI.
+**В планах (по желанию):** CI (GitHub Actions), e2e-тесты.
 

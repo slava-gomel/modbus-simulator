@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import yaml
 
@@ -28,6 +29,14 @@ class Storage:
     def _ensure_data_dir(self) -> None:
         data_dir: Path = self._cfg.storage.data_dir
         data_dir.mkdir(parents=True, exist_ok=True)
+
+    def _ensure_profiles_dir(self) -> None:
+        self._cfg.storage.profiles_path.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _profile_slug(name: str) -> str:
+        safe = re.sub(r"[^\w\-]", "_", name.strip()).strip("_") or "profile"
+        return safe[:80]
 
     # ------------ CONFIG ------------
     def load_config(self) -> None:
@@ -107,4 +116,65 @@ class Storage:
         _apply_block("discrete_inputs", core.discrete_inputs)
         _apply_block("holding_registers", core.holding_registers)
         _apply_block("input_registers", core.input_registers)
+
+    # ------------ PROFILES ------------
+    def list_profiles(self) -> List[Dict[str, Any]]:
+        self._ensure_profiles_dir()
+        profiles_dir = self._cfg.storage.profiles_path
+        if not profiles_dir.exists():
+            return []
+        result = []
+        for path in sorted(profiles_dir.glob("*.yaml")):
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                result.append({
+                    "name": data.get("name", path.stem),
+                    "slug": path.stem,
+                    "comment": data.get("comment", ""),
+                })
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to read profile %s", path)
+        return result
+
+    def save_profile(
+        self, name: str, core: ModbusSimulatorCore, comment: str = ""
+    ) -> str:
+        from .models import ModbusConfigDTO  # noqa: PLC0415
+        self._ensure_profiles_dir()
+        slug = self._profile_slug(name)
+        path = self._cfg.storage.profiles_path / f"{slug}.yaml"
+        config_dto = ModbusConfigDTO.from_config(self._cfg.modbus)
+        state = {
+            "coils": core.coils.values,
+            "discrete_inputs": core.discrete_inputs.values,
+            "holding_registers": core.holding_registers.values,
+            "input_registers": core.input_registers.values,
+        }
+        data = {
+            "name": name.strip() or slug,
+            "comment": comment.strip(),
+            "config": config_dto.model_dump(),
+            "state": state,
+        }
+        with path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        logger.info("Saved profile %s to %s", name, path)
+        return slug
+
+    def load_profile(self, slug: str) -> Dict[str, Any]:
+        path = self._cfg.storage.profiles_path / f"{slug}.yaml"
+        if not path.exists():
+            raise FileNotFoundError(f"Profile not found: {slug}")
+        with path.open("r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    def delete_profile(self, slug: str) -> None:
+        if not self._cfg.storage.profiles_path.exists():
+            raise FileNotFoundError(f"Profile not found: {slug}")
+        path = self._cfg.storage.profiles_path / f"{slug}.yaml"
+        if not path.exists():
+            raise FileNotFoundError(f"Profile not found: {slug}")
+        path.unlink()
+        logger.info("Deleted profile %s", slug)
 

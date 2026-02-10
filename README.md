@@ -1,54 +1,61 @@
 ## modbud_simulator – Modbus TCP Simulator с WEB GUI
 
-Этот проект реализует симулятор Modbus TCP slave-устройства с WEB-интерфейсом для конфигурирования и наблюдения за регистрами.
+Симулятор Modbus TCP slave с WEB-интерфейсом для конфигурирования и наблюдения за регистрами.
 
-### Основные особенности
+### Возможности
 
-- Python backend на FastAPI:
-  - Modbus TCP slave (через `pymodbus` или совместимый стек).
-  - API для управления конфигурацией и состоянием регистров.
-- WEB GUI как SPA (React + TypeScript):
-  - Просмотр и редактирование регистров (coils, discrete inputs, holding, input registers).
-  - Управление профилями конфигурации.
-- Docker Compose:
-  - Отдельные сервисы `backend` и `frontend`.
-  - Volume для хранения конфигурации и состояния.
+- **Backend (FastAPI + pymodbus):** Modbus TCP slave (функции 01–06, 15/16), запуск/остановка сервера через API, хранение конфигурации и состояния в файлах.
+- **WEB GUI (React + TypeScript):** конфигурация Modbus, просмотр и редактирование регистров (coils, discrete inputs, holding, input), пакетная запись и пресеты («Заполнить нулями», «Случайные значения»), управление сервером (статус, Запустить/Остановить), профили (сохранение и загрузка конфигурации и состояния).
+- **Docker Compose:** сервисы `backend` и `frontend`, volume для данных.
 
-### Структура проекта (планируемая)
+### Запуск
 
-- `backend/` – Python-приложение (FastAPI, Modbus-ядро, storage, API).
-- `frontend/` – SPA на React + TypeScript.
-- `memory-bank/` – документация по правилам Cursor (projectbrief, productContext и др.).
-- `docker-compose.yml` – оркестрация сервисов.
-
-### Запуск через Docker Compose
+**Docker Compose (рекомендуется):**
 
 ```bash
 docker compose up --build
 ```
 
-- Backend:
-  - HTTP API: `http://localhost:8000/api/...`
-  - Health-check: `http://localhost:8000/health`
-  - Modbus TCP: `localhost:1502`
-- WEB GUI:
-  - `http://localhost:8080`
+- **Backend:** API `http://localhost:8000/api/...`, health `http://localhost:8000/health`, Modbus TCP `localhost:1502`
+- **WEB GUI:** `http://localhost:8080`
 
-### Локальная разработка backend
+**Локальная разработка:**
 
 ```bash
-cd backend
-pip install -e .[dev]
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Backend
+cd backend && pip install -e .[dev] && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend (в другом терминале)
+cd frontend && npm install && npm run dev
 ```
 
-### Локальная разработка фронтенда
+Фронтенд: `http://localhost:5173`, прокси `/api` → `http://localhost:8000`.
+
+### Профили
+
+В GUI раздел «Профили»: сохранение текущей конфигурации и состояния регистров под именем (и комментарием), загрузка и удаление профилей. Файлы хранятся в volume в каталоге `profiles/` (YAML).
+
+### Пресеты регистров
+
+Для coils и holding регистров: кнопки «Заполнить нулями» и «Случайные значения» — заполняют выбранный диапазон и записывают его одним batch-запросом.
+
+### Авторизация (опционально)
+
+Если заданы переменные окружения `GUI_USER` и `GUI_PASSWORD`, доступ к API и WEB GUI защищён Basic Auth. В GUI отображается форма входа. Без этих переменных авторизация не требуется.
+
+Пример для docker-compose:
+
+```yaml
+environment:
+  - GUI_USER=admin
+  - GUI_PASSWORD=secret
+```
+
+### Тесты
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd backend && python3 -m pytest tests/ -v
 ```
 
-Фронтенд будет доступен по адресу `http://localhost:5173` и будет проксировать `/api` на `http://localhost:8000`.
+Перед запуском тестов нужна установка: `pip install -e .[dev]`. Для тестов используется временный каталог данных (см. `tests/conftest.py`).
 

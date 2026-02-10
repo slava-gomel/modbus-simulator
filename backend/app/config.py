@@ -17,6 +17,7 @@ class StorageConfig(BaseModel):
     data_dir: Path = Path(os.getenv("DATA_DIR", "/data"))
     config_file: str = "config.yaml"
     state_file: str = "state.json"
+    profiles_dir: str = "profiles"
 
     @property
     def config_path(self) -> Path:
@@ -25,6 +26,10 @@ class StorageConfig(BaseModel):
     @property
     def state_path(self) -> Path:
         return self.data_dir / self.state_file
+
+    @property
+    def profiles_path(self) -> Path:
+        return self.data_dir / self.profiles_dir
 
 
 class AppConfig(BaseModel):

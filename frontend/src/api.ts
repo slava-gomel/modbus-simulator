@@ -4,6 +4,16 @@ const api = axios.create({
   baseURL: "/api"
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (err) => {
+    if (err.response?.status === 401) {
+      window.dispatchEvent(new CustomEvent("auth:required"));
+    }
+    return Promise.reject(err);
+  }
+);
+
 export interface ModbusConfigDto {
   host: string;
   port: number;
@@ -26,6 +36,7 @@ export interface ServerStatus {
   running: boolean;
   host: string;
   port: number;
+  error?: string | null;
 }
 
 export async function fetchConfig(): Promise<ModbusConfigDto> {
@@ -78,6 +89,20 @@ export async function fetchServerStatus(): Promise<ServerStatus> {
   return data;
 }
 
+export interface ModbusLogEntry {
+  id: number;
+  type: string;
+  message: string;
+  time: string;
+}
+
+export async function fetchModbusLog(since: number): Promise<{ events: ModbusLogEntry[]; next_id: number }> {
+  const { data } = await api.get<{ events: ModbusLogEntry[]; next_id: number }>("/server/modbus_log", {
+    params: { since }
+  });
+  return data;
+}
+
 export async function startServer(): Promise<ServerStatus> {
   const { data } = await api.post<ServerStatus>("/server/start");
   return data;
@@ -86,5 +111,39 @@ export async function startServer(): Promise<ServerStatus> {
 export async function stopServer(): Promise<ServerStatus> {
   const { data } = await api.post<ServerStatus>("/server/stop");
   return data;
+}
+
+export interface ProfileItem {
+  name: string;
+  slug: string;
+  comment: string;
+}
+
+export async function listProfiles(): Promise<ProfileItem[]> {
+  const { data } = await api.get<ProfileItem[]>("/profiles");
+  return data;
+}
+
+export async function saveProfile(name: string, comment?: string): Promise<{ slug: string; name: string }> {
+  const { data } = await api.post<{ slug: string; name: string }>("/profiles", { name, comment: comment ?? "" });
+  return data;
+}
+
+export async function loadProfile(slug: string): Promise<{ slug: string; loaded: boolean }> {
+  const { data } = await api.post<{ slug: string; loaded: boolean }>(`/profiles/${slug}/load`);
+  return data;
+}
+
+export async function deleteProfile(slug: string): Promise<void> {
+  await api.delete(`/profiles/${slug}`);
+}
+
+export async function authRequired(): Promise<{ required: boolean }> {
+  const { data } = await api.get<{ required: boolean }>("/auth/required");
+  return data;
+}
+
+export function setAuth(username: string, password: string): void {
+  api.defaults.auth = { username, password };
 }
 
