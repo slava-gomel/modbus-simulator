@@ -28,13 +28,55 @@ const kinds: { id: RegisterKind; label: string }[] = [
   { id: "input", label: "Input Registers (04)" }
 ];
 
-type AppLogEntry = { type: string; message: string; time: string };
+type AppLogEntry = { type: string; message: string; time: string; ip?: string };
+
+type LogFilter = "all" | "modbus" | "server" | "errors";
 
 const LogView: React.FC<{
   entries: AppLogEntry[];
   logColors: Record<string, string>;
   onClear: () => void;
 }> = ({ entries, logColors, onClear }) => {
+  const [filter, setFilter] = useState<LogFilter>("all");
+  const [ipFilter, setIpFilter] = useState("");
+  const [search, setSearch] = useState("");
+
+  const isVisible = (entry: AppLogEntry): boolean => {
+    if (ipFilter.trim()) {
+      if (!entry.ip || !entry.ip.startsWith(ipFilter.trim())) return false;
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const text =
+        `${entry.type} ${entry.message}`.toLowerCase();
+      if (!text.includes(q)) return false;
+    }
+
+    if (filter === "all") return true;
+    if (filter === "modbus") {
+      return (
+        entry.type === "modbus_request" ||
+        entry.type === "modbus_response" ||
+        entry.type === "modbus_req_hex" ||
+        entry.type === "modbus_rsp_hex"
+      );
+    }
+    if (filter === "server") {
+      return (
+        entry.type === "server_start" ||
+        entry.type === "server_stop" ||
+        entry.type === "client_connect" ||
+        entry.type === "client_disconnect"
+      );
+    }
+    if (filter === "errors") {
+      return entry.type === "error";
+    }
+    return true;
+  };
+
+  const filtered = entries.filter(isVisible);
+
   return (
     <section className="panel panel-log">
       <div className="panel-inner">
@@ -46,16 +88,106 @@ const LogView: React.FC<{
             </div>
           </div>
           <div className="panel-toolbar">
+            <div className="btn-group" style={{ marginRight: "0.5rem" }}>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={filter === "all" ? "primary" : "ghost"}
+                onClick={() => setFilter("all")}
+              >
+                Все
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={filter === "modbus" ? "primary" : "ghost"}
+                onClick={() => setFilter("modbus")}
+              >
+                Modbus
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={filter === "server" ? "primary" : "ghost"}
+                onClick={() => setFilter("server")}
+              >
+                Сервер
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={filter === "errors" ? "primary" : "ghost"}
+                onClick={() => setFilter("errors")}
+              >
+                Ошибки
+              </button>
+            </div>
+            <div className="input-row" style={{ marginRight: "0.5rem" }}>
+              <div className="field" style={{ minWidth: 120 }}>
+                <label className="field-label" htmlFor="log-ip-filter">
+                  IP
+                </label>
+                <input
+                  id="log-ip-filter"
+                  className="field-input"
+                  type="text"
+                  placeholder="192.168.0."
+                  value={ipFilter}
+                  onChange={(e) => setIpFilter(e.target.value)}
+                />
+              </div>
+              <div className="field" style={{ minWidth: 160 }}>
+                <label className="field-label" htmlFor="log-search">
+                  Поиск
+                </label>
+                <input
+                  id="log-search"
+                  className="field-input"
+                  type="text"
+                  placeholder="FC16, addr=0, error…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm btn-icon"
+              onClick={() => {
+                if (filtered.length === 0) return;
+                const payload = {
+                  exported_at: new Date().toISOString(),
+                  filter,
+                  ipFilter: ipFilter.trim() || null,
+                  search: search.trim() || null,
+                  entries: filtered
+                };
+                const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                  type: "application/json"
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                a.href = url;
+                a.download = `modbus-log-${ts}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Экспорт JSON
+            </button>
             <button type="button" className="btn btn-sm btn-icon" onClick={onClear}>
               Очистить
             </button>
           </div>
         </div>
         <div className="log-container">
-          {entries.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="log-empty">Нет записей журнала</div>
           ) : (
-            [...entries].reverse().map((entry, i) => {
+            [...filtered].reverse().map((entry, i) => {
               const d = new Date(entry.time);
               const base = d.toLocaleTimeString("ru-RU", { hour12: false });
               const ms = String(d.getMilliseconds()).padStart(3, "0");
@@ -170,8 +302,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     const onLog = (e: Event) => {
       const { type, message } = (e as CustomEvent<{ type: string; message: string }>).detail;
+      const m = message.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+      const ip = m?.[1];
       setEventLog((prev) =>
-        [...prev, { type, message, time: new Date().toISOString() }].slice(-MAX_LOG_ENTRIES)
+        [
+          ...prev,
+          {
+            type,
+            message,
+            time: new Date().toISOString(),
+            ...(ip ? { ip } : {})
+          }
+        ].slice(-MAX_LOG_ENTRIES)
       );
     };
     window.addEventListener("app:log", onLog);
@@ -433,6 +575,8 @@ export const App: React.FC = () => {
     error: "#fca5a5",
     server_start: "#4ade80",
     server_stop: "#fdba74",
+    client_connect: "#6ee7b7",
+    client_disconnect: "#f97316",
     modbus_request: "#93c5fd",
     modbus_response: "#9ca3af",
     modbus_req_hex: "#7dd3fc",

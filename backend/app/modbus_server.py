@@ -6,7 +6,8 @@ from typing import Optional
 from pymodbus.datastore import ModbusServerContext, ModbusSlaveContext
 from pymodbus.device import ModbusDeviceIdentification
 from pymodbus.framer import Framer
-from pymodbus.server import StartTcpServer, ServerStop
+
+from .patched_pymodbus_server import ServerStop, StartTcpServer
 
 from .config import ModbusConfig
 from .modbus_core import ModbusSimulatorCore
@@ -42,12 +43,18 @@ def _modbus_request_tracer(request, *addr) -> None:
 
     fc = getattr(request, "function_code", "?")
     unit = getattr(request, "slave_id", "?")
-    msg = f"{client_ip} REQ unit={unit} func={fc} hex={hex_str}"
+    msg = f"{client_ip} → HEX REQ unit={unit} func={fc} hex={hex_str}"
     modbus_log_append("modbus_req_hex", msg)
 
 
-def _modbus_response_tracer(response):
-    """Трейсер для сырых Modbus-ответов (HEX)."""
+def _modbus_response_tracer(response, *addr):
+    """Трейсер для сырых Modbus-ответов (HEX + IP клиента)."""
+    try:
+        peer = addr[0] if addr else None
+        client_ip = peer[0] if isinstance(peer, tuple) and peer else "?"
+    except Exception:  # noqa: BLE001
+        client_ip = "?"
+
     try:
         pdu = response.encode()
         hex_str = pdu.hex(" ")
@@ -56,7 +63,7 @@ def _modbus_response_tracer(response):
 
     fc = getattr(response, "function_code", "?")
     unit = getattr(response, "slave_id", "?")
-    msg = f"RSP unit={unit} func={fc} hex={hex_str}"
+    msg = f"{client_ip} ← HEX RSP unit={unit} func={fc} hex={hex_str}"
     modbus_log_append("modbus_rsp_hex", msg)
     # Ничего не меняем в ответе, просто пробрасываем дальше
     return response, False
@@ -77,7 +84,7 @@ class InMemoryDataStore(ModbusSlaveContext):
 
     def getValues(self, fx: int, address: int, count: int = 1) -> list[int]:  # type: ignore[override]
         fx_name = _FX_NAMES.get(fx, f"FC{fx}")
-        modbus_log_append("modbus_request", f"{fx_name} addr={address} count={count}")
+        modbus_log_append("modbus_request", f"REQ {fx_name} addr={address} count={count}")
         if fx == 1:
             vals = self.core.read_coils(address, count)
         elif fx == 2:
@@ -91,12 +98,15 @@ class InMemoryDataStore(ModbusSlaveContext):
             vals = [0] * count
         preview = vals[:8]
         suffix = "..." if len(vals) > 8 else ""
-        modbus_log_append("modbus_response", f"{fx_name} → {preview}{suffix}")
+        modbus_log_append("modbus_response", f"RSP {fx_name} values={preview}{suffix}")
         return vals
 
     def setValues(self, fx: int, address: int, values: list[int]) -> None:  # type: ignore[override]
         fx_name = _FX_NAMES.get(fx, f"FC{fx}")
-        modbus_log_append("modbus_request", f"{fx_name} addr={address} values={values[:8]}{'...' if len(values) > 8 else ''}")
+        modbus_log_append(
+            "modbus_request",
+            f"REQ {fx_name} addr={address} values={values[:8]}{'...' if len(values) > 8 else ''}",
+        )
         if fx == 5:
             self.core.write_single_coil(address, values[0])
         elif fx == 6:
@@ -108,7 +118,7 @@ class InMemoryDataStore(ModbusSlaveContext):
         else:
             logger.warning("Unsupported write function code: %s", fx)
             return
-        modbus_log_append("modbus_response", f"{fx_name} OK")
+        modbus_log_append("modbus_response", f"RSP {fx_name} OK")
 
 
 def start_modbus_tcp_server(config: ModbusConfig, core: ModbusSimulatorCore) -> None:
@@ -139,7 +149,6 @@ def start_modbus_tcp_server(config: ModbusConfig, core: ModbusSimulatorCore) -> 
             address=(config.host, config.port),
             framer=Framer.SOCKET,
             request_tracer=_modbus_request_tracer,
-            response_manipulator=_modbus_response_tracer,
         )
     finally:
         logger.info("Modbus TCP: цикл сервера завершён (address=%s:%s)", config.host, config.port)
