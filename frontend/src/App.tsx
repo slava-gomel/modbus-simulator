@@ -28,6 +28,59 @@ const kinds: { id: RegisterKind; label: string }[] = [
   { id: "input", label: "Input Registers (04)" }
 ];
 
+type AppLogEntry = { type: string; message: string; time: string };
+
+const LogView: React.FC<{
+  entries: AppLogEntry[];
+  logColors: Record<string, string>;
+  onClear: () => void;
+}> = ({ entries, logColors, onClear }) => {
+  return (
+    <section className="panel panel-log">
+      <div className="panel-inner">
+        <div className="panel-header">
+          <div>
+            <div className="panel-title">Журнал событий</div>
+            <div className="panel-subtitle">
+              Modbus‑операции, ошибки и HEX‑трейсы — последние сверху
+            </div>
+          </div>
+          <div className="panel-toolbar">
+            <button type="button" className="btn btn-sm btn-icon" onClick={onClear}>
+              Очистить
+            </button>
+          </div>
+        </div>
+        <div className="log-container">
+          {entries.length === 0 ? (
+            <div className="log-empty">Нет записей журнала</div>
+          ) : (
+            [...entries].reverse().map((entry, i) => {
+              const d = new Date(entry.time);
+              const base = d.toLocaleTimeString("ru-RU", { hour12: false });
+              const ms = String(d.getMilliseconds()).padStart(3, "0");
+              const timeText = `${base}.${ms}`;
+              return (
+                <div
+                  key={i}
+                  className="log-line"
+                  style={{ color: logColors[entry.type] ?? "#e5e7eb" }}
+                >
+                  <div className="log-time">{timeText}</div>
+                  <div className="log-message">
+                    <span className="badge-log-type">{entry.type}</span>
+                    {entry.message}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 export const App: React.FC = () => {
   const [authRequiredState, setAuthRequiredState] = useState<boolean | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -55,7 +108,7 @@ export const App: React.FC = () => {
   const [stateLoading, setStateLoading] = useState(false);
   const [stateError, setStateError] = useState<string | null>(null);
 
-  const [eventLog, setEventLog] = useState<Array<{ type: string; message: string; time: string }>>([]);
+  const [eventLog, setEventLog] = useState<AppLogEntry[]>([]);
   const MAX_LOG_ENTRIES = 300;
 
   const pushLog = (type: string, message: string) => {
@@ -377,344 +430,555 @@ export const App: React.FC = () => {
   };
 
   const logColors: Record<string, string> = {
-    error: "#c62828",
-    server_start: "#2e7d32",
-    server_stop: "#e65100",
-    modbus_request: "#1565c0",
-    modbus_response: "#455a64",
-    modbus_req_hex: "#0d47a1",
-    modbus_rsp_hex: "#37474f",
-    request: "#1565c0",
-    response: "#455a64",
-    info: "#212121"
+    error: "#fca5a5",
+    server_start: "#4ade80",
+    server_stop: "#fdba74",
+    modbus_request: "#93c5fd",
+    modbus_response: "#9ca3af",
+    modbus_req_hex: "#7dd3fc",
+    modbus_rsp_hex: "#a5b4fc",
+    request: "#93c5fd",
+    response: "#9ca3af",
+    info: "#e5e7eb"
   };
+
+  const columnsPerRow = 10;
+  const registerRows: number[][] = [];
+  for (let i = 0; i < values.length; i += columnsPerRow) {
+    registerRows.push(values.slice(i, i + columnsPerRow));
+  }
 
   if (authRequiredState === true && !authenticated) {
     return (
-      <div style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: 400, margin: "2rem auto" }}>
-        <h1>Modbus TCP Simulator</h1>
-        <p style={{ color: "#666" }}>Требуется авторизация</p>
-        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <label>
-            Логин:
-            <input
-              type="text"
-              value={loginUser}
-              onChange={(e) => setLoginUser(e.target.value)}
-              required
-              autoComplete="username"
-              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-            />
-          </label>
-          <label>
-            Пароль:
-            <input
-              type="password"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-              required
-              autoComplete="current-password"
-              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-            />
-          </label>
-          {loginError && <p style={{ color: "red", margin: 0 }}>{loginError}</p>}
-          <button type="submit">Войти</button>
-        </form>
+      <div className="login-wrapper">
+        <div className="login-card">
+          <div className="login-title">Modbus TCP Simulator</div>
+          <div className="login-subtitle">Требуется авторизация для доступа к панели управления</div>
+          <form className="login-form" onSubmit={handleLogin}>
+            <div className="field">
+              <label className="field-label" htmlFor="login-user">
+                Логин
+              </label>
+              <input
+                id="login-user"
+                className="field-input"
+                type="text"
+                value={loginUser}
+                onChange={(e) => setLoginUser(e.target.value)}
+                required
+                autoComplete="username"
+                placeholder="admin"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="login-pass">
+                Пароль
+              </label>
+              <input
+                id="login-pass"
+                className="field-input"
+                type="password"
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+            </div>
+            {loginError && (
+              <div className="error-text">
+                <span className="error-dot" />
+                {loginError}
+              </div>
+            )}
+            <button type="submit" className="btn">
+              <span data-dot="" />
+              Войти в панель
+            </button>
+          </form>
+          <div className="login-footer">
+            Доступ через Basic Auth. <strong>GUI_USER / GUI_PASSWORD</strong> задаются в окружении backend.
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", padding: "1rem", maxWidth: 1200, margin: "0 auto" }}>
-      <h1>Modbus TCP Simulator</h1>
-
-      <section style={{ marginBottom: "1.5rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Modbus сервер</h2>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <span>
-            Статус:{" "}
-            <strong style={{ color: serverStatus?.running ? "green" : "red" }}>
-              {serverStatus?.running ? "запущен" : "остановлен"}
-            </strong>
-            {serverStatus && (
-              <> ( {serverStatus.host}:{serverStatus.port} )</>
-            )}
-          </span>
-          {serverStatus?.error && (
-            <span style={{ color: "red", marginLeft: "0.5rem" }}>{serverStatus.error}</span>
-          )}
-          <button type="button" onClick={() => void refreshServerStatus()} disabled={serverLoading}>
-            Обновить статус
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleServerStart()}
-            disabled={serverLoading || serverStatus?.running}
-          >
-            Запустить
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleServerStop()}
-            disabled={serverLoading || !serverStatus?.running}
-          >
-            Остановить
-          </button>
-        </div>
-      </section>
-
-      <section style={{ marginBottom: "2rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Конфигурация</h2>
-        {configLoading && <p>Загрузка конфигурации...</p>}
-        {configError && <p style={{ color: "red" }}>{configError}</p>}
-        {config && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-            <label>
-              Host:
-              <input
-                type="text"
-                value={config.host}
-                onChange={(e) => setConfig({ ...config, host: e.target.value })}
-              />
-            </label>
-            <label>
-              Port:
-              <input
-                type="number"
-                value={config.port}
-                onChange={(e) =>
-                  setConfig({ ...config, port: Number(e.target.value) || 0 })
-                }
-              />
-            </label>
-            <label>
-              Unit ID:
-              <input
-                type="number"
-                value={config.unit_id}
-                onChange={(e) =>
-                  setConfig({ ...config, unit_id: Number(e.target.value) || 0 })
-                }
-              />
-            </label>
-            <label>
-              Coils size:
-              <input
-                type="number"
-                value={config.coils_size}
-                onChange={(e) =>
-                  setConfig({ ...config, coils_size: Number(e.target.value) || 0 })
-                }
-              />
-            </label>
-            <label>
-              Holding size:
-              <input
-                type="number"
-                value={config.holding_registers_size}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    holding_registers_size: Number(e.target.value) || 0
-                  })
-                }
-              />
-            </label>
-            <button type="button" onClick={handleConfigSave}>
-              Сохранить конфигурацию
-            </button>
+    <div className="app-root">
+      <header className="app-header">
+        <div className="app-title-block">
+          <div className="app-title">
+            Modbus TCP Simulator
+            <span className="app-title-pill">Modbus 01–06 · 15/16</span>
           </div>
-        )}
-      </section>
-
-      <section style={{ marginBottom: "2rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Профили</h2>
-        {profilesError && <p style={{ color: "red" }}>{profilesError}</p>}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
-          <input
-            type="text"
-            placeholder="Имя профиля"
-            value={profileName}
-            onChange={(e) => setProfileName(e.target.value)}
-            style={{ width: 160 }}
-          />
-          <input
-            type="text"
-            placeholder="Комментарий"
-            value={profileComment}
-            onChange={(e) => setProfileComment(e.target.value)}
-            style={{ width: 180 }}
-          />
-          <button type="button" onClick={() => void handleSaveProfile()} disabled={profilesLoading || !profileName.trim()}>
-            Сохранить текущий
-          </button>
-          <button type="button" onClick={() => void refreshProfiles()}>Обновить список</button>
+          <div className="app-subtitle">
+            Управление Modbus‑сервером, регистрами и профилями в одном современном интерфейсе
+          </div>
         </div>
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {profiles.map((p) => (
-            <li key={p.slug} style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-              <span>{p.name}</span>
-              {p.comment && <span style={{ color: "#666", fontSize: 14 }}>({p.comment})</span>}
-              <button type="button" onClick={() => void handleLoadProfile(p.slug)} disabled={profilesLoading}>
-                Загрузить
-              </button>
-              <button type="button" onClick={() => void handleDeleteProfile(p.slug)}>Удалить</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Регистры</h2>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
-          <label>
-            Тип:
-            <select
-              value={selectedKind}
-              onChange={(e) => setSelectedKind(e.target.value as RegisterKind)}
-            >
-              {kinds.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Start:
-            <input
-              type="number"
-              value={start}
-              onChange={(e) => setStart(Number(e.target.value) || 0)}
-            />
-          </label>
-          <label>
-            Count:
-            <input
-              type="number"
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value) || 1)}
-            />
-          </label>
-          <button type="button" onClick={() => void reloadRegisters()}>
-            Обновить
-          </button>
-          {(selectedKind === "coils" || selectedKind === "holding") && (
-            <>
-              <button type="button" onClick={() => void handleBatchSave()}>
-                Сохранить диапазон (batch)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setValues(values.map(() => 0));
-                  void handlePresetApply(values.map(() => 0));
-                }}
-              >
-                Заполнить нулями
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const rand = values.map(() => Math.floor(Math.random() * (selectedKind === "coils" ? 2 : 65536)));
-                  setValues(rand);
-                  void handlePresetApply(rand);
-                }}
-              >
-                Случайные значения
-              </button>
-            </>
-          )}
+        <div className="app-badges">
+          <span className="badge-soft">FastAPI · React · pymodbus</span>
+          <span className="badge-soft" data-variant="danger">
+            Только для тестирования и отладки
+          </span>
         </div>
-        {stateLoading && <p>Загрузка регистров...</p>}
-        {stateError && <p style={{ color: "red" }}>{stateError}</p>}
+      </header>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-            gap: "0.5rem"
-          }}
-        >
-          {values.map((v, idx) => {
-            const addr = start + idx;
-            const editable = selectedKind === "coils" || selectedKind === "holding";
-            return (
-              <div
-                key={addr}
-                style={{
-                  border: "1px solid #ccc",
-                  borderRadius: 4,
-                  padding: "0.25rem 0.5rem",
-                  fontSize: 14
-                }}
-              >
-                <div>Addr {addr}</div>
-                {editable ? (
-                  <input
-                    type="number"
-                    value={v}
-                    onChange={(e) =>
-                      void handleCellChange(idx, Number(e.target.value) || 0)
-                    }
-                    style={{ width: "100%" }}
+      <main className="layout-grid">
+        {/* Левая колонка: сервер + конфиг + профили */}
+        <section className="panel panel-server">
+          <div className="panel-inner">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Modbus сервер</div>
+                <div className="panel-subtitle">
+                  Старт / стоп и текущее состояние TCP‑сервера
+                </div>
+              </div>
+              <div className="panel-toolbar">
+                <div className="status-pill">
+                  <span
+                    className="status-dot"
+                    data-state={serverStatus?.running ? "running" : "stopped"}
                   />
-                ) : (
-                  <div>{v}</div>
+                  <span className="status-label">
+                    {serverStatus?.running ? "запущен" : "остановлен"}
+                  </span>
+                  {serverStatus && (
+                    <span className="status-meta">
+                      {serverStatus.host}:{serverStatus.port}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {serverStatus?.error && (
+              <div className="error-text">
+                <span className="error-dot" />
+                {serverStatus.error}
+              </div>
+            )}
+
+            <div className="panel-section">
+              <div className="btn-group">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon"
+                  onClick={() => void refreshServerStatus()}
+                  disabled={serverLoading}
+                >
+                  Обновить статус
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void handleServerStart()}
+                  disabled={serverLoading || !!serverStatus?.running}
+                >
+                  <span data-dot="" />
+                  Запустить сервер
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  data-variant="danger"
+                  onClick={() => void handleServerStop()}
+                  disabled={serverLoading || !serverStatus?.running}
+                >
+                  Остановить
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel panel-config">
+          <div className="panel-inner">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Конфигурация сервера</div>
+                <div className="panel-subtitle">
+                  Хост, порт и размеры областей регистров
+                </div>
+              </div>
+            </div>
+
+            {configLoading && <div className="panel-subtitle">Загрузка конфигурации…</div>}
+            {configError && (
+              <div className="error-text">
+                <span className="error-dot" />
+                {configError}
+              </div>
+            )}
+
+            {config && (
+              <div className="panel-section">
+                <div className="input-row">
+                  <div className="field">
+                    <label className="field-label" htmlFor="cfg-host">
+                      Host
+                    </label>
+                    <input
+                      id="cfg-host"
+                      className="field-input"
+                      type="text"
+                      value={config.host}
+                      onChange={(e) => setConfig({ ...config, host: e.target.value })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor="cfg-port">
+                      Port
+                    </label>
+                    <input
+                      id="cfg-port"
+                      className="field-input"
+                      type="number"
+                      value={config.port}
+                      onChange={(e) =>
+                        setConfig({ ...config, port: Number(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor="cfg-unit">
+                      Unit ID
+                    </label>
+                    <input
+                      id="cfg-unit"
+                      className="field-input"
+                      type="number"
+                      value={config.unit_id}
+                      onChange={(e) =>
+                        setConfig({ ...config, unit_id: Number(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="input-row">
+                  <div className="field">
+                    <label className="field-label" htmlFor="cfg-coils">
+                      Coils size
+                    </label>
+                    <input
+                      id="cfg-coils"
+                      className="field-input"
+                      type="number"
+                      value={config.coils_size}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          coils_size: Number(e.target.value) || 0
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="field-label" htmlFor="cfg-holding">
+                      Holding size
+                    </label>
+                    <input
+                      id="cfg-holding"
+                      className="field-input"
+                      type="number"
+                      value={config.holding_registers_size}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          holding_registers_size: Number(e.target.value) || 0
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <button type="button" className="btn btn-sm" onClick={handleConfigSave}>
+                    Сохранить конфигурацию
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="panel panel-profiles">
+          <div className="panel-inner">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Профили</div>
+                <div className="panel-subtitle">
+                  Сохраняйте и переключайте наборы конфигурации и регистров
+                </div>
+              </div>
+              <div className="panel-toolbar">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon"
+                  onClick={() => void refreshProfiles()}
+                >
+                  Обновить список
+                </button>
+              </div>
+            </div>
+
+            {profilesError && (
+              <div className="error-text">
+                <span className="error-dot" />
+                {profilesError}
+              </div>
+            )}
+
+            <div className="panel-section">
+              <div className="input-row">
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="profile-name">
+                    Имя профиля
+                  </label>
+                  <input
+                    id="profile-name"
+                    className="field-input"
+                    type="text"
+                    placeholder="Например: demo‑проект"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                  />
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="profile-comment">
+                    Комментарий
+                  </label>
+                  <input
+                    id="profile-comment"
+                    className="field-input"
+                    type="text"
+                    placeholder="Опционально"
+                    value={profileComment}
+                    onChange={(e) => setProfileComment(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void handleSaveProfile()}
+                  disabled={profilesLoading || !profileName.trim()}
+                >
+                  Сохранить текущий профиль
+                </button>
+              </div>
+
+              <ul className="profiles-list">
+                {profiles.map((p) => (
+                  <li key={p.slug} className="profiles-item">
+                    <div className="profiles-item-main">
+                      <span className="profiles-name">{p.name}</span>
+                      {p.comment && <span className="profiles-comment">{p.comment}</span>}
+                    </div>
+                    <div className="profiles-actions">
+                      <button
+                        type="button"
+                        className="btn-chip"
+                        onClick={() => void handleLoadProfile(p.slug)}
+                        disabled={profilesLoading}
+                      >
+                        Загрузить
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-chip"
+                        data-variant="danger"
+                        onClick={() => void handleDeleteProfile(p.slug)}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Средняя колонка: регистры */}
+        <section className="panel panel-registers">
+          <div className="panel-inner">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Регистры</div>
+                <div className="panel-subtitle">
+                  Чтение и запись диапазонов регистров, пресеты и batch‑операции
+                </div>
+              </div>
+            </div>
+
+            <div className="registers-toolbar">
+              <div className="field">
+                <label className="field-label" htmlFor="reg-kind">
+                  Тип
+                </label>
+                <select
+                  id="reg-kind"
+                  className="field-select"
+                  value={selectedKind}
+                  onChange={(e) => setSelectedKind(e.target.value as RegisterKind)}
+                >
+                  {kinds.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="reg-start">
+                  Start
+                </label>
+                <input
+                  id="reg-start"
+                  className="field-input"
+                  type="number"
+                  value={start}
+                  onChange={(e) => setStart(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div className="field">
+                <label className="field-label" htmlFor="reg-count">
+                  Count
+                </label>
+                <input
+                  id="reg-count"
+                  className="field-input"
+                  type="number"
+                  value={count}
+                  onChange={(e) => setCount(Number(e.target.value) || 1)}
+                />
+              </div>
+              <div className="btn-group">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon"
+                  onClick={() => void reloadRegisters()}
+                >
+                  Обновить
+                </button>
+                {(selectedKind === "coils" || selectedKind === "holding") && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => void handleBatchSave()}
+                    >
+                      Сохранить диапазон (batch)
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      data-variant="outline"
+                      onClick={() => {
+                        const zeros = values.map(() => 0);
+                        setValues(zeros);
+                        void handlePresetApply(zeros);
+                      }}
+                    >
+                      Заполнить нулями
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      data-variant="ghost"
+                      onClick={() => {
+                        const rand = values.map(() =>
+                          Math.floor(Math.random() * (selectedKind === "coils" ? 2 : 65536))
+                        );
+                        setValues(rand);
+                        void handlePresetApply(rand);
+                      }}
+                    >
+                      Случайные значения
+                    </button>
+                  </>
                 )}
               </div>
-            );
-          })}
-        </div>
-      </section>
+            </div>
 
-      <section style={{ marginTop: "2rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
-        <h2>Журнал событий</h2>
-        <div style={{ marginBottom: "0.5rem" }}>
-          <button type="button" onClick={() => setEventLog([])}>
-            Очистить
-          </button>
-        </div>
-        <div
-          style={{
-            maxHeight: 280,
-            overflowY: "auto",
-            fontFamily: "monospace",
-            fontSize: 12,
-            border: "1px solid #eee",
-            borderRadius: 4,
-            padding: "0.5rem",
-            background: "#fafafa"
-          }}
-        >
-          {eventLog.length === 0 ? (
-            <div style={{ color: "#888" }}>Нет записей</div>
-          ) : (
-            [...eventLog].reverse().map((entry, i) => {
-              const d = new Date(entry.time);
-              const base = d.toLocaleTimeString("ru-RU", { hour12: false });
-              const ms = String(d.getMilliseconds()).padStart(3, "0");
-              const timeText = `${base}.${ms}`;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    color: logColors[entry.type] ?? "#212121",
-                    marginBottom: "0.25rem",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word"
-                  }}
-                >
-                  <span style={{ color: "#666", marginRight: "0.5rem" }}>
-                    {timeText}
-                  </span>
-                  {entry.message}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
+            {stateLoading && (
+              <div className="panel-subtitle">Загрузка значений регистров…</div>
+            )}
+            {stateError && (
+              <div className="error-text">
+                <span className="error-dot" />
+                {stateError}
+              </div>
+            )}
+
+            <div className="registers-table-wrapper">
+              <table className="registers-table">
+                <thead>
+                  <tr className="registers-header-row">
+                    <th>Address range</th>
+                    {Array.from({ length: columnsPerRow }, (_, i) => (
+                      <th key={i}>+{i}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {registerRows.map((row, rowIndex) => {
+                    const baseAddr = start + rowIndex * columnsPerRow;
+                    const lastAddr = baseAddr + row.length - 1;
+                    const rangeLabel =
+                      row.length > 1 ? `${baseAddr} - ${lastAddr}` : `${baseAddr}`;
+                    return (
+                      <tr key={baseAddr} className="registers-row">
+                        <td>{rangeLabel}</td>
+                        {Array.from({ length: columnsPerRow }, (_, colIndex) => {
+                          const globalIndex = rowIndex * columnsPerRow + colIndex;
+                          const addr = baseAddr + colIndex;
+                          const value = row[colIndex];
+                          const editable =
+                            selectedKind === "coils" || selectedKind === "holding";
+
+                          if (colIndex >= row.length) {
+                            return <td key={addr} />;
+                          }
+
+                          return (
+                            <td key={addr}>
+                              {editable ? (
+                                <input
+                                  className="field-input registers-cell-input"
+                                  type="number"
+                                  value={value}
+                                  onChange={(e) =>
+                                    void handleCellChange(
+                                      globalIndex,
+                                      Number(e.target.value) || 0
+                                    )
+                                  }
+                                />
+                              ) : (
+                                value
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* Правая колонка: лог */}
+        <LogView
+          entries={eventLog}
+          logColors={logColors}
+          onClear={() => setEventLog([])}
+        />
+      </main>
     </div>
   );
 };
