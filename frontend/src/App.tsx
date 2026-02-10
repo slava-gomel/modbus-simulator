@@ -2,9 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   fetchConfig,
   fetchRegisters,
+  fetchServerStatus,
   ModbusConfigDto,
   RegisterKind,
+  ServerStatus,
+  startServer,
+  stopServer,
   updateConfig,
+  writeBatch,
   writeSingle
 } from "./api";
 
@@ -20,6 +25,9 @@ export const App: React.FC = () => {
   const [configLoading, setConfigLoading] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
+  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
+
   const [selectedKind, setSelectedKind] = useState<RegisterKind>("holding");
   const [start, setStart] = useState(0);
   const [count, setCount] = useState(16);
@@ -32,8 +40,12 @@ export const App: React.FC = () => {
       try {
         setConfigLoading(true);
         setConfigError(null);
-        const cfg = await fetchConfig();
+        const [cfg, status] = await Promise.all([
+          fetchConfig(),
+          fetchServerStatus().catch(() => null)
+        ]);
         setConfig(cfg);
+        if (status) setServerStatus(status);
       } catch (e) {
         setConfigError("Не удалось загрузить конфигурацию");
       } finally {
@@ -96,9 +108,87 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleBatchSave = async () => {
+    if (values.length === 0) return;
+    if (selectedKind !== "coils" && selectedKind !== "holding") return;
+    try {
+      setStateError(null);
+      await writeBatch(
+        selectedKind === "coils" ? "coils" : "holding",
+        start,
+        values
+      );
+      // после batch-записи перечитаем диапазон на всякий случай
+      await reloadRegisters();
+    } catch (e) {
+      setStateError("Не удалось выполнить пакетную запись");
+    }
+  };
+
+  const refreshServerStatus = async () => {
+    try {
+      const status = await fetchServerStatus();
+      setServerStatus(status);
+    } catch {
+      setServerStatus(null);
+    }
+  };
+
+  const handleServerStart = async () => {
+    try {
+      setServerLoading(true);
+      const status = await startServer();
+      setServerStatus(status);
+    } finally {
+      setServerLoading(false);
+    }
+  };
+
+  const handleServerStop = async () => {
+    try {
+      setServerLoading(true);
+      const status = await stopServer();
+      setServerStatus(status);
+    } finally {
+      setServerLoading(false);
+    }
+  };
+
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", padding: "1rem", maxWidth: 1200, margin: "0 auto" }}>
       <h1>Modbus TCP Simulator</h1>
+
+      <section style={{ marginBottom: "1.5rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
+        <h2>Modbus сервер</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <span>
+            Статус:{" "}
+            <strong style={{ color: serverStatus?.running ? "green" : "red" }}>
+              {serverStatus?.running ? "запущен" : "остановлен"}
+            </strong>
+            {serverStatus && (
+              <> ( {serverStatus.host}:{serverStatus.port} )</>
+            )}
+          </span>
+          <button type="button" onClick={() => void refreshServerStatus()} disabled={serverLoading}>
+            Обновить статус
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleServerStart()}
+            disabled={serverLoading || serverStatus?.running}
+          >
+            Запустить
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleServerStop()}
+            disabled={serverLoading || !serverStatus?.running}
+          >
+            Остановить
+          </button>
+        </div>
+      </section>
 
       <section style={{ marginBottom: "2rem", padding: "1rem", border: "1px solid #ddd", borderRadius: 8 }}>
         <h2>Конфигурация</h2>
@@ -199,6 +289,11 @@ export const App: React.FC = () => {
           <button type="button" onClick={() => void reloadRegisters()}>
             Обновить
           </button>
+          {(selectedKind === "coils" || selectedKind === "holding") && (
+            <button type="button" onClick={() => void handleBatchSave()}>
+              Сохранить диапазон (batch)
+            </button>
+          )}
         </div>
         {stateLoading && <p>Загрузка регистров...</p>}
         {stateError && <p style={{ color: "red" }}>{stateError}</p>}

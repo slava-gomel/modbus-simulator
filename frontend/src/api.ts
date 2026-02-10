@@ -22,6 +22,12 @@ export interface RegisterRangeResponse {
   values: number[];
 }
 
+export interface ServerStatus {
+  running: boolean;
+  host: string;
+  port: number;
+}
+
 export async function fetchConfig(): Promise<ModbusConfigDto> {
   const { data } = await api.get<ModbusConfigDto>("/config");
   return data;
@@ -51,6 +57,34 @@ export async function writeSingle(
   const { data } = await api.put<RegisterRangeResponse>(`/state/${kind}`, null, {
     params: { start: address, value }
   });
+  return data;
+}
+
+export async function writeBatch(
+  kind: "coils" | "holding",
+  start: number,
+  values: number[]
+): Promise<RegisterRangeResponse> {
+  const { data } = await api.put<RegisterRangeResponse>(`/state/${kind}/batch`, {
+    start,
+    count: values.length,
+    values
+  });
+  return data;
+}
+
+export async function fetchServerStatus(): Promise<ServerStatus> {
+  const { data } = await api.get<ServerStatus>("/server/status");
+  return data;
+}
+
+export async function startServer(): Promise<ServerStatus> {
+  const { data } = await api.post<ServerStatus>("/server/start");
+  return data;
+}
+
+export async function stopServer(): Promise<ServerStatus> {
+  const { data } = await api.post<ServerStatus>("/server/stop");
   return data;
 }
 

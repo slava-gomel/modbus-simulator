@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from ..modbus_core import ModbusSimulatorCore
-from ..models import RegisterKind, RegisterRangeResponse
+from ..models import RegisterKind, RegisterRangeRequest, RegisterRangeResponse
 from ..storage import Storage
 
 
@@ -88,4 +88,46 @@ def write_single(
         values = core.read_holding_registers(start, 1)
 
     return RegisterRangeResponse(kind=kind, start=start, values=values)
+
+
+@router.put("/{kind}/batch", response_model=RegisterRangeResponse)
+def write_multiple(
+    kind: RegisterKind,
+    body: RegisterRangeRequest,
+) -> RegisterRangeResponse:
+    """
+    Множественная запись (15/16) поверх REST API.
+    """
+    core = _get_core()
+    start = body.start
+    values = body.values
+
+    if not values:
+        raise HTTPException(status_code=400, detail="Values list must not be empty")
+
+    try:
+        if kind == "coils":
+            core.write_multiple_coils(start, values)
+        elif kind == "holding":
+            core.write_multiple_holding_registers(start, values)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Batch write supported only for 'coils' and 'holding'",
+            )
+    except IndexError:
+        raise HTTPException(status_code=400, detail="Address range out of bounds") from None
+
+    storage = _get_storage()
+    if storage is not None:
+        storage.save_state(core)
+
+    # Вернём записанное значение как подтверждение
+    read_count = len(values)
+    if kind == "coils":
+        read_back = core.read_coils(start, read_count)
+    else:
+        read_back = core.read_holding_registers(start, read_count)
+
+    return RegisterRangeResponse(kind=kind, start=start, values=read_back)
 

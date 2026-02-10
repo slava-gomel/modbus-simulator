@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app, core
+from app.main import app
 
 
 client = TestClient(app)
@@ -40,4 +40,18 @@ def test_write_coil_as_bool() -> None:
     assert resp2.status_code == 200
     data2 = resp2.json()
     assert data2["values"][0] == 1
+
+
+def test_batch_write_holding() -> None:
+    start = 10
+    values = [10, 20, 30]
+    resp = client.put(
+        "/api/state/holding/batch",
+        json={"start": start, "count": len(values), "values": values},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["start"] == start
+    assert data["values"] == values
+
 

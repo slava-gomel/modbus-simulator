@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from pymodbus.datastore import ModbusSlaveContext, ModbusServerContext
+from pymodbus.datastore import ModbusServerContext, ModbusSlaveContext
 from pymodbus.device import ModbusDeviceIdentification
-from pymodbus.server import StartTcpServer
+from pymodbus.server import StartTcpServer, ServerStop
 from pymodbus.transaction import ModbusRtuFramer
 
 from .config import ModbusConfig
@@ -49,6 +49,14 @@ class InMemoryDataStore(ModbusSlaveContext):
             # Write Single Register – один регистр
             self.core.write_single_holding_register(address, values[0])
             return
+        if fx == 15:
+            # Write Multiple Coils
+            self.core.write_multiple_coils(address, values)
+            return
+        if fx == 16:
+            # Write Multiple Holding Registers
+            self.core.write_multiple_holding_registers(address, values)
+            return
         logger.warning("Unsupported write function code: %s", fx)
 
 
@@ -78,4 +86,14 @@ def start_modbus_tcp_server(config: ModbusConfig, core: ModbusSimulatorCore) -> 
         address=(config.host, config.port),
         framer=ModbusRtuFramer,  # стандартный framer
     )
+
+
+def stop_modbus_tcp_server() -> None:
+    """
+    Остановить Modbus TCP сервер, запущенный через StartTcpServer.
+
+    Использует глобальную функцию ServerStop из pymodbus.
+    """
+    logger.info("Stopping Modbus TCP server")
+    ServerStop()
 

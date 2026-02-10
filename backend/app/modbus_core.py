@@ -60,6 +60,12 @@ class ModbusSimulatorCore:
     def write_single_coil(self, address: int, value: int) -> None:
         self.coils.write_single(address, value)
 
+    def write_multiple_coils(self, address: int, values: list[int]) -> None:
+        count = len(values)
+        self.coils._check_range(address, count)
+        for idx, v in enumerate(values):
+            self.coils.write_single(address + idx, v)
+
     # Discrete Inputs (02)
     def read_discrete_inputs(self, address: int, count: int) -> list[int]:
         return self.discrete_inputs.read(address, count)
@@ -70,6 +76,12 @@ class ModbusSimulatorCore:
 
     def write_single_holding_register(self, address: int, value: int) -> None:
         self.holding_registers.write_single(address, value)
+
+    def write_multiple_holding_registers(self, address: int, values: list[int]) -> None:
+        count = len(values)
+        self.holding_registers._check_range(address, count)
+        for idx, v in enumerate(values):
+            self.holding_registers.write_single(address + idx, v)
 
     # Input Registers (04)
     def read_input_registers(self, address: int, count: int) -> list[int]:
