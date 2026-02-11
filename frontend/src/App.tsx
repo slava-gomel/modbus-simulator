@@ -472,16 +472,50 @@ export const App: React.FC = () => {
 
   const handleHoldingValueChange = async (globalIndex: number, text: string) => {
     if (selectedKind !== "holding") return;
-    // На этом этапе предполагается, что пользователь "закончил" ввод (blur/Enter),
-    // сам текст уже сохранён в editHolding через onChange.
-    const current = text ?? editHolding[globalIndex] ?? "";
-    const trimmed = current.trim();
+    setEditHolding((prev) => ({ ...prev, [globalIndex]: text }));
 
-    if (!trimmed) {
-      setStateError("Значение не может быть пустым");
-      return;
-    }
-    // Разрешаем промежуточные состояния ввода (".", "-", "-.", "+", "+.")
+    const trimmed = (text ?? "").trim();
+    const normalized = trimmed.replace(",", ".");
+
+    const groupSize =
+      registerFormatKind === "int32" || registerFormatKind === "float32"
+        ? 2
+        : registerFormatKind === "int64" || registerFormatKind === "float64"
+        ? 4
+        : 1;
+
+    const rowIndex = Math.floor(globalIndex / columnsPerRow);
+    const colIndex = globalIndex % columnsPerRow;
+    const groupBaseIndex =
+      groupSize === 1 ? globalIndex : rowIndex * columnsPerRow + Math.floor(colIndex / groupSize) * groupSize;
+    const baseAddr = start + groupBaseIndex;
+
+    const applyZero = async () => {
+      try {
+        if (groupSize === 1) {
+          const resp = await writeSingle("holding", baseAddr, 0);
+          const updated = [...values];
+          updated[groupBaseIndex] = resp.values[0];
+          setValues(updated);
+        } else {
+          const regs = new Array(groupSize).fill(0);
+          await writeBatch("holding", baseAddr, regs);
+          const updated = [...values];
+          for (let i = 0; i < regs.length; i += 1) {
+            if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
+          }
+          setValues(updated);
+        }
+      } finally {
+        setEditHolding((prev) => {
+          const next = { ...prev };
+          delete next[globalIndex];
+          return next;
+        });
+      }
+    };
+
+    // Пустое или "сырая" строка → пишем 0
     if (
       !trimmed ||
       trimmed === "-" ||
@@ -493,30 +527,12 @@ export const App: React.FC = () => {
       trimmed === "-," ||
       trimmed === "+,"
     ) {
+      await applyZero();
       return;
     }
-    const normalized = trimmed.replace(",", ".");
-    // Для FLOAT32/FLOAT64 допускаем промежуточные значения, оканчивающиеся на точку/запятую (например "3." / "3,")
-    if (
-      (registerFormatKind === "float32" || registerFormatKind === "float64") &&
-      /^[+-]?\d+[.,]$/.test(trimmed)
-    ) {
-      return;
-    }
+
     try {
       setStateError(null);
-      const groupSize =
-        registerFormatKind === "int32" || registerFormatKind === "float32"
-          ? 2
-          : registerFormatKind === "int64" || registerFormatKind === "float64"
-          ? 4
-          : 1;
-
-      const rowIndex = Math.floor(globalIndex / columnsPerRow);
-      const colIndex = globalIndex % columnsPerRow;
-      const groupBaseIndex =
-        groupSize === 1 ? globalIndex : rowIndex * columnsPerRow + Math.floor(colIndex / groupSize) * groupSize;
-      const baseAddr = start + groupBaseIndex;
 
       // BITMAP
       if (registerFormatKind === "bitmap") {
@@ -683,6 +699,7 @@ export const App: React.FC = () => {
         e instanceof Error ? e.message : "Не удалось интерпретировать значение для выбранного формата";
       setStateError(msg);
       pushLog("error", msg);
+      await applyZero();
     }
   };
 
