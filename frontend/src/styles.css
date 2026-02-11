@@ -486,6 +486,112 @@ body {
   margin-bottom: 0.4rem;
 }
 
+.reg-format-wrapper {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.reg-format-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.reg-format-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.2), transparent 70%),
+    rgba(15, 23, 42, 0.96);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.8);
+}
+
+.reg-format-option {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.reg-format-option input[type="radio"] {
+  margin: 0;
+  width: 11px;
+  height: 11px;
+}
+
+.bits-section {
+  margin-top: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.bits-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bits-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.bits-row-label {
+  font-size: 0.7rem;
+  color: var(--text-soft);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.bits-row-cells {
+  display: grid;
+  grid-template-columns: repeat(32, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.bit-cell {
+  border: 1px solid rgba(22, 163, 74, 0.4);
+  background: #022c22;
+  color: #bbf7d0;
+  font-size: 0.6rem;
+  padding: 0.15rem 0;
+  text-align: center;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast),
+    transform 80ms ease-out, box-shadow 80ms ease-out;
+}
+
+.bit-cell--on {
+  background: #16a34a;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.8);
+}
+
+.bit-cell--off {
+  background: #022c22;
+  border-color: rgba(22, 163, 74, 0.4);
+  opacity: 0.8;
+}
+
+.bit-cell:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.8);
+}
+
+.bit-cell:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 .registers-table-wrapper {
   margin-top: 0.4rem;
   border-radius: var(--radius-md);

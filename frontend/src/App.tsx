@@ -32,6 +32,16 @@ type AppLogEntry = { type: string; message: string; time: string; ip?: string };
 
 type LogFilter = "all" | "modbus" | "server" | "errors";
 
+type RegisterFormat =
+  | "decimal"
+  | "integer"
+  | "hex"
+  | "binary"
+  | "float32"
+  | "float32sw"
+  | "float64"
+  | "float64sw";
+
 const LogView: React.FC<{
   entries: AppLogEntry[];
   logColors: Record<string, string>;
@@ -239,6 +249,7 @@ export const App: React.FC = () => {
   const [values, setValues] = useState<number[]>([]);
   const [stateLoading, setStateLoading] = useState(false);
   const [stateError, setStateError] = useState<string | null>(null);
+  const [registerFormat, setRegisterFormat] = useState<RegisterFormat>("decimal");
 
   const [eventLog, setEventLog] = useState<AppLogEntry[]>([]);
   const MAX_LOG_ENTRIES = 300;
@@ -591,6 +602,71 @@ export const App: React.FC = () => {
   for (let i = 0; i < values.length; i += columnsPerRow) {
     registerRows.push(values.slice(i, i + columnsPerRow));
   }
+
+  const bitsPerRow = 32;
+  const bitRows: number[][] = [];
+  for (let i = 0; i < values.length; i += bitsPerRow) {
+    bitRows.push(values.slice(i, i + bitsPerRow));
+  }
+
+  const formatRegisterValue = (globalIndex: number, raw: number): string => {
+    const v = Number.isFinite(raw) ? raw : 0;
+    switch (registerFormat) {
+      case "decimal":
+        return String(v);
+      case "integer": {
+        const signed = v & 0x8000 ? v - 0x10000 : v;
+        return String(signed);
+      }
+      case "hex":
+        return `0x${(v & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`;
+      case "binary":
+        return (v & 0xffff).toString(2).padStart(16, "0");
+      case "float32":
+      case "float32sw": {
+        const evenIndex = globalIndex % 2 === 0 ? globalIndex : globalIndex - 1;
+        const i0 = evenIndex;
+        const i1 = evenIndex + 1;
+        if (i1 >= values.length) return String(v);
+        const r0 = values[i0] & 0xffff;
+        const r1 = values[i1] & 0xffff;
+        let hi = r0;
+        let lo = r1;
+        if (registerFormat === "float32sw") {
+          hi = r1;
+          lo = r0;
+        }
+        const word = (hi << 16) | lo;
+        const buf = new ArrayBuffer(4);
+        const view = new DataView(buf);
+        view.setUint32(0, word);
+        const f = view.getFloat32(0);
+        return Number.isFinite(f) ? f.toString() : "NaN";
+      }
+      case "float64":
+      case "float64sw": {
+        const groupBase = globalIndex - (globalIndex % 4);
+        const idx = [groupBase, groupBase + 1, groupBase + 2, groupBase + 3];
+        if (idx[3] >= values.length) return String(v);
+        const regs = idx.map((i) => values[i] & 0xffff);
+        let words = [...regs];
+        if (registerFormat === "float64sw") {
+          words = [regs[2], regs[3], regs[0], regs[1]];
+        }
+        const buf = new ArrayBuffer(8);
+        const view = new DataView(buf);
+        // big-endian 16-битных регистров
+        view.setUint16(0, words[0]);
+        view.setUint16(2, words[1]);
+        view.setUint16(4, words[2]);
+        view.setUint16(6, words[3]);
+        const f = view.getFloat64(0);
+        return Number.isFinite(f) ? f.toString() : "NaN";
+      }
+      default:
+        return String(v);
+    }
+  };
 
   if (authRequiredState === true && !authenticated) {
     return (
@@ -1047,6 +1123,86 @@ export const App: React.FC = () => {
               </div>
             </div>
 
+            {(selectedKind === "holding" || selectedKind === "input") && (
+              <div className="reg-format-wrapper">
+                <div className="reg-format-label">Формат отображения регистров</div>
+                <div className="reg-format-group">
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "decimal"}
+                      onChange={() => setRegisterFormat("decimal")}
+                    />
+                    <span>Decimal</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "integer"}
+                      onChange={() => setRegisterFormat("integer")}
+                    />
+                    <span>Integer</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "hex"}
+                      onChange={() => setRegisterFormat("hex")}
+                    />
+                    <span>Hexadecimal</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "binary"}
+                      onChange={() => setRegisterFormat("binary")}
+                    />
+                    <span>Binary</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "float32"}
+                      onChange={() => setRegisterFormat("float32")}
+                    />
+                    <span>32‑bit float</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "float32sw"}
+                      onChange={() => setRegisterFormat("float32sw")}
+                    />
+                    <span>32‑bit sw. float</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "float64"}
+                      onChange={() => setRegisterFormat("float64")}
+                    />
+                    <span>64‑bit float</span>
+                  </label>
+                  <label className="reg-format-option">
+                    <input
+                      type="radio"
+                      name="reg-format"
+                      checked={registerFormat === "float64sw"}
+                      onChange={() => setRegisterFormat("float64sw")}
+                    />
+                    <span>64‑bit sw. float</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
             {stateLoading && (
               <div className="panel-subtitle">Загрузка значений регистров…</div>
             )}
@@ -1054,6 +1210,45 @@ export const App: React.FC = () => {
               <div className="error-text">
                 <span className="error-dot" />
                 {stateError}
+              </div>
+            )}
+
+            {selectedKind === "coils" && values.length > 0 && (
+              <div className="bits-section">
+                <div className="panel-subtitle">
+                  Битовый вид для текущего диапазона Coils. Клик по квадрату переключает 0/1.
+                </div>
+                <div className="bits-grid">
+                  {bitRows.map((row, rowIndex) => {
+                    const baseAddr = start + rowIndex * bitsPerRow;
+                    return (
+                      <div key={baseAddr} className="bits-row">
+                        <div className="bits-row-label">
+                          {baseAddr.toString().padStart(4, "0")}
+                        </div>
+                        <div className="bits-row-cells">
+                          {row.map((value, colIndex) => {
+                            const globalIndex = rowIndex * bitsPerRow + colIndex;
+                            const addr = baseAddr + colIndex;
+                            const on = value ? 1 : 0;
+                            return (
+                              <button
+                                key={addr}
+                                type="button"
+                                className={`bit-cell ${
+                                  on ? "bit-cell--on" : "bit-cell--off"
+                                }`}
+                                onClick={() => void handleCellChange(globalIndex, on ? 0 : 1)}
+                              >
+                                {addr.toString().padStart(2, "0")}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1102,7 +1297,7 @@ export const App: React.FC = () => {
                                   }
                                 />
                               ) : (
-                                value
+                                formatRegisterValue(globalIndex, value)
                               )}
                             </td>
                           );
