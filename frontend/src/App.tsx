@@ -32,15 +32,9 @@ type AppLogEntry = { type: string; message: string; time: string; ip?: string };
 
 type LogFilter = "all" | "modbus" | "server" | "errors";
 
-type RegisterFormat =
-  | "decimal"
-  | "integer"
-  | "hex"
-  | "binary"
-  | "float32"
-  | "float32sw"
-  | "float64"
-  | "float64sw";
+type RegisterFormatKind = "int16" | "int32" | "int64" | "float32" | "float64" | "bitmap";
+type RegisterSign = "signed" | "unsigned";
+type RegisterOrder = "ABCD" | "CDAB";
 
 const LogView: React.FC<{
   entries: AppLogEntry[];
@@ -249,9 +243,12 @@ export const App: React.FC = () => {
   const [values, setValues] = useState<number[]>([]);
   const [stateLoading, setStateLoading] = useState(false);
   const [stateError, setStateError] = useState<string | null>(null);
-  const [registerFormat, setRegisterFormat] = useState<RegisterFormat>("decimal");
+  const [registerFormatKind, setRegisterFormatKind] = useState<RegisterFormatKind>("int16");
+  const [registerSign, setRegisterSign] = useState<RegisterSign>("unsigned");
+  const [registerOrder, setRegisterOrder] = useState<RegisterOrder>("ABCD");
 
   const [eventLog, setEventLog] = useState<AppLogEntry[]>([]);
+  const [editHolding, setEditHolding] = useState<Record<number, string>>({});
   const MAX_LOG_ENTRIES = 300;
 
   const pushLog = (type: string, message: string) => {
@@ -473,6 +470,222 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleHoldingValueChange = async (globalIndex: number, text: string) => {
+    if (selectedKind !== "holding") return;
+    // На этом этапе предполагается, что пользователь "закончил" ввод (blur/Enter),
+    // сам текст уже сохранён в editHolding через onChange.
+    const current = text ?? editHolding[globalIndex] ?? "";
+    const trimmed = current.trim();
+
+    if (!trimmed) {
+      setStateError("Значение не может быть пустым");
+      return;
+    }
+    // Разрешаем промежуточные состояния ввода (".", "-", "-.", "+", "+.")
+    if (
+      !trimmed ||
+      trimmed === "-" ||
+      trimmed === "+" ||
+      trimmed === "." ||
+      trimmed === "," ||
+      trimmed === "-." ||
+      trimmed === "+." ||
+      trimmed === "-," ||
+      trimmed === "+,"
+    ) {
+      return;
+    }
+    const normalized = trimmed.replace(",", ".");
+    // Для FLOAT32/FLOAT64 допускаем промежуточные значения, оканчивающиеся на точку/запятую (например "3." / "3,")
+    if (
+      (registerFormatKind === "float32" || registerFormatKind === "float64") &&
+      /^[+-]?\d+[.,]$/.test(trimmed)
+    ) {
+      return;
+    }
+    try {
+      setStateError(null);
+      const groupSize =
+        registerFormatKind === "int32" || registerFormatKind === "float32"
+          ? 2
+          : registerFormatKind === "int64" || registerFormatKind === "float64"
+          ? 4
+          : 1;
+
+      const rowIndex = Math.floor(globalIndex / columnsPerRow);
+      const colIndex = globalIndex % columnsPerRow;
+      const groupBaseIndex =
+        groupSize === 1 ? globalIndex : rowIndex * columnsPerRow + Math.floor(colIndex / groupSize) * groupSize;
+      const baseAddr = start + groupBaseIndex;
+
+      // BITMAP
+      if (registerFormatKind === "bitmap") {
+        let value: number;
+        if (/^[01]{1,16}$/.test(trimmed)) {
+          value = parseInt(trimmed, 2);
+        } else {
+          const n = Number(normalized);
+          if (!Number.isInteger(n)) throw new Error("BITMAP: ожидается целое число или 16‑битная маска");
+          value = n;
+        }
+        if (value < 0 || value > 0xffff) throw new Error("BITMAP: значение должно быть в диапазоне 0..65535");
+        const resp = await writeSingle("holding", baseAddr, value);
+        const updated = [...values];
+        updated[groupBaseIndex] = resp.values[0];
+        setValues(updated);
+        setEditHolding((prev) => {
+          const next = { ...prev };
+          delete next[globalIndex];
+          return next;
+        });
+        return;
+      }
+
+      // INT16
+      if (registerFormatKind === "int16") {
+        const n = Number(normalized);
+        if (!Number.isInteger(n)) throw new Error("INT16: ожидается целое число");
+        let value = n;
+        if (registerSign === "unsigned") {
+          if (value < 0 || value > 0xffff) throw new Error("INT16 unsigned: 0..65535");
+        } else {
+          if (value < -32768 || value > 32767) throw new Error("INT16 signed: -32768..32767");
+          if (value < 0) value = 0x10000 + value;
+        }
+        const resp = await writeSingle("holding", baseAddr, value);
+        const updated = [...values];
+        updated[groupBaseIndex] = resp.values[0];
+        setValues(updated);
+        setEditHolding((prev) => {
+          const next = { ...prev };
+          delete next[globalIndex];
+          return next;
+        });
+        return;
+      }
+
+      // INT32 / FLOAT32
+      if (groupSize === 2 && (registerFormatKind === "int32" || registerFormatKind === "float32")) {
+        const slice = values.slice(groupBaseIndex, groupBaseIndex + 2);
+        if (slice.length < 2) throw new Error("Недостаточно регистров для 32‑битного значения");
+
+        let regs: number[] = [];
+        if (registerFormatKind === "int32") {
+          const n = Number(normalized);
+          if (!Number.isInteger(n)) throw new Error("INT32: ожидается целое число");
+          let bigint = BigInt(n);
+          if (registerSign === "unsigned") {
+            if (bigint < 0n || bigint > 0xffffffffn) throw new Error("INT32 unsigned: 0..2^32-1");
+          } else {
+            const min = -(1n << 31n);
+            const max = (1n << 31n) - 1n;
+            if (bigint < min || bigint > max) throw new Error("INT32 signed: -2^31..2^31-1");
+            if (bigint < 0n) bigint = (1n << 32n) + bigint;
+          }
+          const u32 = Number(bigint & 0xffffffffn);
+          let w0 = (u32 >>> 16) & 0xffff;
+          let w1 = u32 & 0xffff;
+          if (registerOrder === "CDAB") {
+            [w0, w1] = [w1, w0];
+          }
+          regs = [w0, w1];
+        } else {
+          const f = Number(normalized);
+          if (!Number.isFinite(f)) throw new Error("FLOAT32: ожидается число");
+          const buf = new ArrayBuffer(4);
+          const view = new DataView(buf);
+          view.setFloat32(0, f);
+          const u32 = view.getUint32(0);
+          let w0 = (u32 >>> 16) & 0xffff;
+          let w1 = u32 & 0xffff;
+          if (registerOrder === "CDAB") {
+            [w0, w1] = [w1, w0];
+          }
+          regs = [w0, w1];
+        }
+
+        await writeBatch("holding", baseAddr, regs);
+        const updated = [...values];
+        for (let i = 0; i < regs.length; i += 1) {
+          if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
+        }
+        setValues(updated);
+        setEditHolding((prev) => {
+          const next = { ...prev };
+          delete next[globalIndex];
+          return next;
+        });
+        return;
+      }
+
+      // INT64 / FLOAT64
+      if (groupSize === 4 && (registerFormatKind === "int64" || registerFormatKind === "float64")) {
+        const slice = values.slice(groupBaseIndex, groupBaseIndex + 4);
+        if (slice.length < 4) throw new Error("Недостаточно регистров для 64‑битного значения");
+
+        let regs: number[] = [];
+        if (registerFormatKind === "int64") {
+          let bigint: bigint;
+          try {
+            bigint = BigInt(normalized);
+          } catch {
+            throw new Error("INT64: ожидается целое число");
+          }
+          if (registerSign === "unsigned") {
+            if (bigint < 0n || bigint > (1n << 64n) - 1n)
+              throw new Error("INT64 unsigned: 0..2^64-1");
+          } else {
+            const min = -(1n << 63n);
+            const max = (1n << 63n) - 1n;
+            if (bigint < min || bigint > max) throw new Error("INT64 signed: -2^63..2^63-1");
+            if (bigint < 0n) bigint = (1n << 64n) + bigint;
+          }
+          const words: number[] = [];
+          let tmp = bigint;
+          for (let i = 0; i < 4; i += 1) {
+            words.unshift(Number(tmp & 0xffffn));
+            tmp >>= 16n;
+          }
+          regs = [...words];
+          if (registerOrder === "CDAB") {
+            regs = [regs[2], regs[3], regs[0], regs[1]];
+          }
+        } else {
+          const f = Number(normalized);
+          if (!Number.isFinite(f)) throw new Error("FLOAT64: ожидается число");
+          const buf = new ArrayBuffer(8);
+          const view = new DataView(buf);
+          view.setFloat64(0, f);
+          const words: number[] = [];
+          for (let i = 0; i < 4; i += 1) {
+            words.push(view.getUint16(i * 2));
+          }
+          regs = [...words];
+          if (registerOrder === "CDAB") {
+            regs = [regs[2], regs[3], regs[0], regs[1]];
+          }
+        }
+
+        await writeBatch("holding", baseAddr, regs);
+        const updated = [...values];
+        for (let i = 0; i < regs.length; i += 1) {
+          if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
+        }
+        setValues(updated);
+        setEditHolding((prev) => {
+          const next = { ...prev };
+          delete next[globalIndex];
+          return next;
+        });
+      }
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Не удалось интерпретировать значение для выбранного формата";
+      setStateError(msg);
+      pushLog("error", msg);
+    }
+  };
+
   const refreshServerStatus = async () => {
     try {
       const status = await fetchServerStatus();
@@ -597,7 +810,7 @@ export const App: React.FC = () => {
     info: "#e5e7eb"
   };
 
-  const columnsPerRow = 10;
+  const columnsPerRow = 8;
   const registerRows: number[][] = [];
   for (let i = 0; i < values.length; i += columnsPerRow) {
     registerRows.push(values.slice(i, i + columnsPerRow));
@@ -611,61 +824,100 @@ export const App: React.FC = () => {
 
   const formatRegisterValue = (globalIndex: number, raw: number): string => {
     const v = Number.isFinite(raw) ? raw : 0;
-    switch (registerFormat) {
-      case "decimal":
-        return String(v);
-      case "integer": {
+    const unsigned16 = v & 0xffff;
+
+    if (registerFormatKind === "bitmap") {
+      return unsigned16.toString(2).padStart(16, "0");
+    }
+
+    if (registerFormatKind === "int16") {
+      if (registerSign === "unsigned") {
+        return String(unsigned16);
+      }
         const signed = v & 0x8000 ? v - 0x10000 : v;
         return String(signed);
-      }
-      case "hex":
-        return `0x${(v & 0xffff).toString(16).toUpperCase().padStart(4, "0")}`;
-      case "binary":
-        return (v & 0xffff).toString(2).padStart(16, "0");
-      case "float32":
-      case "float32sw": {
-        const evenIndex = globalIndex % 2 === 0 ? globalIndex : globalIndex - 1;
-        const i0 = evenIndex;
-        const i1 = evenIndex + 1;
-        if (i1 >= values.length) return String(v);
-        const r0 = values[i0] & 0xffff;
-        const r1 = values[i1] & 0xffff;
-        let hi = r0;
-        let lo = r1;
-        if (registerFormat === "float32sw") {
-          hi = r1;
-          lo = r0;
-        }
-        const word = (hi << 16) | lo;
-        const buf = new ArrayBuffer(4);
-        const view = new DataView(buf);
-        view.setUint32(0, word);
-        const f = view.getFloat32(0);
-        return Number.isFinite(f) ? f.toString() : "NaN";
-      }
-      case "float64":
-      case "float64sw": {
-        const groupBase = globalIndex - (globalIndex % 4);
-        const idx = [groupBase, groupBase + 1, groupBase + 2, groupBase + 3];
-        if (idx[3] >= values.length) return String(v);
-        const regs = idx.map((i) => values[i] & 0xffff);
-        let words = [...regs];
-        if (registerFormat === "float64sw") {
-          words = [regs[2], regs[3], regs[0], regs[1]];
-        }
-        const buf = new ArrayBuffer(8);
-        const view = new DataView(buf);
-        // big-endian 16-битных регистров
-        view.setUint16(0, words[0]);
-        view.setUint16(2, words[1]);
-        view.setUint16(4, words[2]);
-        view.setUint16(6, words[3]);
-        const f = view.getFloat64(0);
-        return Number.isFinite(f) ? f.toString() : "NaN";
-      }
-      default:
-        return String(v);
     }
+
+    if (registerFormatKind === "int32") {
+      const evenIndex = globalIndex % 2 === 0 ? globalIndex : globalIndex - 1;
+      const i0 = evenIndex;
+      const i1 = evenIndex + 1;
+      if (i1 >= values.length) return String(unsigned16);
+      let w0 = values[i0] & 0xffff;
+      let w1 = values[i1] & 0xffff;
+      if (registerOrder === "CDAB") {
+        // меняем местами старшее и младшее слово
+        [w0, w1] = [w1, w0];
+      }
+      const u32 = (w0 << 16) | w1;
+      if (registerSign === "unsigned") {
+        return String(u32 >>> 0);
+      }
+      const s32 = u32 & 0x80000000 ? u32 - 0x100000000 : u32;
+      return String(s32);
+    }
+
+    if (registerFormatKind === "int64") {
+      const groupBase = globalIndex - (globalIndex % 4);
+      const idx = [groupBase, groupBase + 1, groupBase + 2, groupBase + 3];
+      if (idx[3] >= values.length) return String(unsigned16);
+      let regs = idx.map((i) => values[i] & 0xffff);
+      if (registerOrder === "CDAB") {
+        regs = [regs[2], regs[3], regs[0], regs[1]];
+      }
+      // собрать в BigInt
+      let acc = 0n;
+      for (const r of regs) {
+        acc = (acc << 16n) | BigInt(r);
+      }
+      if (registerSign === "unsigned") {
+        return acc.toString();
+      }
+      const bit63 = 1n << 63n;
+      const mod64 = 1n << 64n;
+      if (acc & bit63) {
+        acc = acc - mod64;
+      }
+      return acc.toString();
+    }
+
+    if (registerFormatKind === "float32") {
+      const evenIndex = globalIndex % 2 === 0 ? globalIndex : globalIndex - 1;
+      const i0 = evenIndex;
+      const i1 = evenIndex + 1;
+      if (i1 >= values.length) return String(unsigned16);
+      let w0 = values[i0] & 0xffff;
+      let w1 = values[i1] & 0xffff;
+      if (registerOrder === "CDAB") {
+        [w0, w1] = [w1, w0];
+      }
+      const word = (w0 << 16) | w1;
+      const buf = new ArrayBuffer(4);
+      const view = new DataView(buf);
+      view.setUint32(0, word >>> 0);
+      const f = view.getFloat32(0);
+      return Number.isFinite(f) ? f.toString() : "NaN";
+    }
+
+    if (registerFormatKind === "float64") {
+      const groupBase = globalIndex - (globalIndex % 4);
+      const idx = [groupBase, groupBase + 1, groupBase + 2, groupBase + 3];
+      if (idx[3] >= values.length) return String(unsigned16);
+      let regs = idx.map((i) => values[i] & 0xffff);
+      if (registerOrder === "CDAB") {
+        regs = [regs[2], regs[3], regs[0], regs[1]];
+      }
+      const buf = new ArrayBuffer(8);
+      const view = new DataView(buf);
+      view.setUint16(0, regs[0]);
+      view.setUint16(2, regs[1]);
+      view.setUint16(4, regs[2]);
+      view.setUint16(6, regs[3]);
+      const f = view.getFloat64(0);
+      return Number.isFinite(f) ? f.toString() : "NaN";
+    }
+
+    return String(unsigned16);
   };
 
   if (authRequiredState === true && !authenticated) {
@@ -1131,75 +1383,112 @@ export const App: React.FC = () => {
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "decimal"}
-                      onChange={() => setRegisterFormat("decimal")}
+                      checked={registerFormatKind === "int16"}
+                      onChange={() => setRegisterFormatKind("int16")}
                     />
-                    <span>Decimal</span>
+                    <span>INT16</span>
                   </label>
                   <label className="reg-format-option">
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "integer"}
-                      onChange={() => setRegisterFormat("integer")}
+                      checked={registerFormatKind === "int32"}
+                      onChange={() => setRegisterFormatKind("int32")}
                     />
-                    <span>Integer</span>
+                    <span>INT32</span>
                   </label>
                   <label className="reg-format-option">
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "hex"}
-                      onChange={() => setRegisterFormat("hex")}
+                      checked={registerFormatKind === "int64"}
+                      onChange={() => setRegisterFormatKind("int64")}
                     />
-                    <span>Hexadecimal</span>
+                    <span>INT64</span>
                   </label>
                   <label className="reg-format-option">
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "binary"}
-                      onChange={() => setRegisterFormat("binary")}
+                      checked={registerFormatKind === "float32"}
+                      onChange={() => setRegisterFormatKind("float32")}
                     />
-                    <span>Binary</span>
+                    <span>FLOAT32</span>
                   </label>
                   <label className="reg-format-option">
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "float32"}
-                      onChange={() => setRegisterFormat("float32")}
+                      checked={registerFormatKind === "float64"}
+                      onChange={() => setRegisterFormatKind("float64")}
                     />
-                    <span>32‑bit float</span>
+                    <span>FLOAT64</span>
                   </label>
                   <label className="reg-format-option">
                     <input
                       type="radio"
                       name="reg-format"
-                      checked={registerFormat === "float32sw"}
-                      onChange={() => setRegisterFormat("float32sw")}
+                      checked={registerFormatKind === "bitmap"}
+                      onChange={() => setRegisterFormatKind("bitmap")}
                     />
-                    <span>32‑bit sw. float</span>
-                  </label>
-                  <label className="reg-format-option">
-                    <input
-                      type="radio"
-                      name="reg-format"
-                      checked={registerFormat === "float64"}
-                      onChange={() => setRegisterFormat("float64")}
-                    />
-                    <span>64‑bit float</span>
-                  </label>
-                  <label className="reg-format-option">
-                    <input
-                      type="radio"
-                      name="reg-format"
-                      checked={registerFormat === "float64sw"}
-                      onChange={() => setRegisterFormat("float64sw")}
-                    />
-                    <span>64‑bit sw. float</span>
+                    <span>BITMAP</span>
                   </label>
                 </div>
+
+                {registerFormatKind !== "bitmap" && (
+                  <div className="reg-format-subrow">
+                    <div className="reg-format-subrow-label">Signedness</div>
+                    <div className="reg-format-group">
+                      <label className="reg-format-option">
+                        <input
+                          type="radio"
+                          name="reg-sign"
+                          checked={registerSign === "unsigned"}
+                          onChange={() => setRegisterSign("unsigned")}
+                        />
+                        <span>Unsigned</span>
+                      </label>
+                      <label className="reg-format-option">
+                        <input
+                          type="radio"
+                          name="reg-sign"
+                          checked={registerSign === "signed"}
+                          onChange={() => setRegisterSign("signed")}
+                        />
+                        <span>Signed</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {(registerFormatKind === "int32" ||
+                  registerFormatKind === "int64" ||
+                  registerFormatKind === "float32" ||
+                  registerFormatKind === "float64") && (
+                  <div className="reg-format-subrow">
+                    <div className="reg-format-subrow-label">Word order</div>
+                    <div className="reg-format-group">
+                      <label className="reg-format-option">
+                        <input
+                          type="radio"
+                          name="reg-order"
+                          checked={registerOrder === "ABCD"}
+                          onChange={() => setRegisterOrder("ABCD")}
+                        />
+                        <span>ABCD</span>
+                      </label>
+                      <label className="reg-format-option">
+                        <input
+                          type="radio"
+                          name="reg-order"
+                          checked={registerOrder === "CDAB"}
+                          onChange={() => setRegisterOrder("CDAB")}
+                        />
+                        <span>CDAB</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1213,10 +1502,12 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            {selectedKind === "coils" && values.length > 0 && (
+            {(selectedKind === "coils" || selectedKind === "discrete_inputs") &&
+              values.length > 0 && (
               <div className="bits-section">
                 <div className="panel-subtitle">
-                  Битовый вид для текущего диапазона Coils. Клик по квадрату переключает 0/1.
+                  Битовый вид для текущего диапазона{" "}
+                  {selectedKind === "coils" ? "Coils (интерактивно)" : "Discrete Inputs (только чтение)"}.
                 </div>
                 <div className="bits-grid">
                   {bitRows.map((row, rowIndex) => {
@@ -1231,14 +1522,20 @@ export const App: React.FC = () => {
                             const globalIndex = rowIndex * bitsPerRow + colIndex;
                             const addr = baseAddr + colIndex;
                             const on = value ? 1 : 0;
+                            const interactive = selectedKind === "coils";
                             return (
                               <button
                                 key={addr}
                                 type="button"
-                                className={`bit-cell ${
-                                  on ? "bit-cell--on" : "bit-cell--off"
+                                className={`bit-cell ${on ? "bit-cell--on" : "bit-cell--off"} ${
+                                  interactive ? "" : "bit-cell--readonly"
                                 }`}
-                                onClick={() => void handleCellChange(globalIndex, on ? 0 : 1)}
+                                onClick={
+                                  interactive
+                                    ? () => void handleCellChange(globalIndex, on ? 0 : 1)
+                                    : undefined
+                                }
+                                disabled={!interactive}
                               >
                                 {addr.toString().padStart(2, "0")}
                               </button>
@@ -1252,62 +1549,127 @@ export const App: React.FC = () => {
               </div>
             )}
 
-            <div className="registers-table-wrapper">
-              <table className="registers-table">
-                <thead>
-                  <tr className="registers-header-row">
-                    <th>Address range</th>
-                    {Array.from({ length: columnsPerRow }, (_, i) => (
-                      <th key={i}>+{i}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {registerRows.map((row, rowIndex) => {
-                    const baseAddr = start + rowIndex * columnsPerRow;
-                    const lastAddr = baseAddr + row.length - 1;
-                    const rangeLabel =
-                      row.length > 1 ? `${baseAddr} - ${lastAddr}` : `${baseAddr}`;
-                    return (
-                      <tr key={baseAddr} className="registers-row">
-                        <td>{rangeLabel}</td>
-                        {Array.from({ length: columnsPerRow }, (_, colIndex) => {
-                          const globalIndex = rowIndex * columnsPerRow + colIndex;
-                          const addr = baseAddr + colIndex;
-                          const value = row[colIndex];
-                          const editable =
-                            selectedKind === "coils" || selectedKind === "holding";
+            {(selectedKind === "holding" || selectedKind === "input") && (
+              <div className="registers-table-wrapper">
+                <table className="registers-table">
+                  <thead>
+                    <tr className="registers-header-row">
+                      <th>Address range</th>
+                      {Array.from({ length: columnsPerRow }, (_, i) => (
+                        <th key={i}>+{i}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {registerRows.map((row, rowIndex) => {
+                      const baseAddr = start + rowIndex * columnsPerRow;
+                      const lastAddr = baseAddr + row.length - 1;
+                      const rangeLabel =
+                        row.length > 1 ? `${baseAddr} - ${lastAddr}` : `${baseAddr}`;
 
-                          if (colIndex >= row.length) {
-                            return <td key={addr} />;
-                          }
+                      const cells: JSX.Element[] = [];
+                      const groupSize =
+                        registerFormatKind === "int32" || registerFormatKind === "float32"
+                          ? 2
+                          : registerFormatKind === "int64" || registerFormatKind === "float64"
+                          ? 4
+                          : 1;
 
-                          return (
-                            <td key={addr}>
-                              {editable ? (
+                      let colIndex = 0;
+                      while (colIndex < columnsPerRow) {
+                        const globalIndex = rowIndex * columnsPerRow + colIndex;
+                        const addr = baseAddr + colIndex;
+
+                        if (colIndex >= row.length) {
+                          cells.push(<td key={addr} />);
+                          colIndex += 1;
+                          continue;
+                        }
+
+                        const remainingInRow = row.length - colIndex;
+                        const span = Math.min(groupSize, remainingInRow, columnsPerRow - colIndex);
+                        const value = row[colIndex];
+
+                        if (groupSize === 1) {
+                          if (selectedKind === "holding") {
+                            cells.push(
+                              <td key={addr}>
                                 <input
                                   className="field-input registers-cell-input"
-                                  type="number"
-                                  value={value}
+                                  type="text"
+                                  value={editHolding[globalIndex] ?? formatRegisterValue(globalIndex, value)}
                                   onChange={(e) =>
-                                    void handleCellChange(
-                                      globalIndex,
-                                      Number(e.target.value) || 0
-                                    )
+                                    setEditHolding((prev) => ({
+                                      ...prev,
+                                      [globalIndex]: e.target.value
+                                    }))
+                                  }
+                                  onBlur={(e) =>
+                                    void handleHoldingValueChange(globalIndex, e.target.value)
                                   }
                                 />
-                              ) : (
-                                formatRegisterValue(globalIndex, value)
-                              )}
+                              </td>
+                            );
+                          } else {
+                            cells.push(
+                              <td key={addr}>
+                                {formatRegisterValue(globalIndex, value)}
+                              </td>
+                            );
+                          }
+                          colIndex += 1;
+                          continue;
+                        }
+
+                        // Широкие форматы: одно значение на 2 или 4 регистра
+                        if (selectedKind === "holding") {
+                          cells.push(
+                            <td
+                              key={addr}
+                              colSpan={span}
+                              className="registers-cell-wide"
+                            >
+                              <input
+                                className="field-input registers-cell-input"
+                                type="text"
+                                value={editHolding[globalIndex] ?? formatRegisterValue(globalIndex, value)}
+                                onChange={(e) =>
+                                  setEditHolding((prev) => ({
+                                    ...prev,
+                                    [globalIndex]: e.target.value
+                                  }))
+                                }
+                                onBlur={(e) =>
+                                  void handleHoldingValueChange(globalIndex, e.target.value)
+                                }
+                              />
                             </td>
                           );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        } else {
+                          cells.push(
+                            <td
+                              key={addr}
+                              colSpan={span}
+                              className="registers-cell-wide"
+                            >
+                              {formatRegisterValue(globalIndex, value)}
+                            </td>
+                          );
+                        }
+                        colIndex += span;
+                      }
+
+                      return (
+                        <tr key={baseAddr} className="registers-row">
+                          <td>{rangeLabel}</td>
+                          {cells}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </section>
 
