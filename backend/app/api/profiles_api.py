@@ -46,6 +46,11 @@ class ProfileSaveRequest(BaseModel):
     comment: str = ""
 
 
+class ProfileUpdateRequest(BaseModel):
+    """Опционально позволяет изменить комментарий при обновлении профиля."""
+
+    comment: str | None = None
+
 @router.get("", response_model=list)
 def list_profiles() -> list:
     storage, _, _, _ = _get_deps()
@@ -63,9 +68,32 @@ def save_profile(body: ProfileSaveRequest) -> dict:
     return {"slug": slug, "name": body.name.strip() or slug}
 
 
+@router.post("/{slug}/update", response_model=dict)
+def update_profile(slug: str, body: ProfileUpdateRequest | None = None) -> dict:
+    """Обновить существующий профиль из текущей конфигурации и состояния.
+
+    Перезаписывает:
+    - config/state из текущего ядра
+    - generators из текущего движка генераторов
+    Имя профиля и (по умолчанию) комментарий сохраняются.
+    """
+    storage, _, core, engine = _get_deps()
+    generators_data: list[dict] = []
+    if engine is not None:
+        generators_data = [g.model_dump() for g in engine.get_generators()]
+    comment = body.comment if body is not None else None
+    try:
+        storage.update_profile(slug, core, comment=comment, generators=generators_data)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"slug": slug, "updated": True}
+
+
 @router.delete("/{slug}")
 def delete_profile(slug: str) -> None:
     storage, _, _, _ = _get_deps()
+    if slug == "default":
+        raise HTTPException(status_code=400, detail="Default profile cannot be deleted")
     try:
         storage.delete_profile(slug)
     except FileNotFoundError as e:

@@ -22,6 +22,7 @@ import {
   startServer,
   stopServer,
   updateConfig,
+  updateProfile,
   writeBatch,
   writeSingle
 } from "./api";
@@ -35,7 +36,7 @@ const kinds: { id: RegisterKind; label: string }[] = [
 
 type AppLogEntry = { type: string; message: string; time: string; ip?: string };
 
-type LogFilter = "all" | "modbus" | "server" | "errors";
+type LogFilter = "all" | "modbus" | "server" | "generators" | "errors";
 
 type RegisterFormatKind = "int16" | "int32" | "int64" | "float32" | "float64" | "bitmap";
 type RegisterSign = "signed" | "unsigned";
@@ -76,6 +77,16 @@ const LogView: React.FC<{
         entry.type === "server_stop" ||
         entry.type === "client_connect" ||
         entry.type === "client_disconnect"
+      );
+    }
+    if (filter === "generators") {
+      return (
+        entry.type === "generator_create" ||
+        entry.type === "generator_edit" ||
+        entry.type === "generator_enable" ||
+        entry.type === "generator_disable" ||
+        entry.type === "generator_delete" ||
+        entry.type === "generator_load"
       );
     }
     if (filter === "errors") {
@@ -121,6 +132,14 @@ const LogView: React.FC<{
                 onClick={() => setFilter("server")}
               >
                 Сервер
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={filter === "generators" ? "primary" : "ghost"}
+                onClick={() => setFilter("generators")}
+              >
+                Генераторы
               </button>
               <button
                 type="button"
@@ -241,6 +260,7 @@ export const App: React.FC = () => {
   const [profileComment, setProfileComment] = useState("");
   const [profilesLoading, setProfilesLoading] = useState(false);
   const [profilesError, setProfilesError] = useState<string | null>(null);
+  const [currentProfileSlug, setCurrentProfileSlug] = useState<string>("default");
 
   const [selectedKind, setSelectedKind] = useState<RegisterKind>("holding");
   const [start, setStart] = useState(0);
@@ -825,6 +845,11 @@ export const App: React.FC = () => {
       setProfilesError(null);
       const list = await listProfiles();
       setProfiles(list);
+      // Если текущий профиль ещё не выбран, но есть default – считаем его активным.
+      if (!currentProfileSlug) {
+        const def = list.find((p) => p.slug === "default");
+        if (def) setCurrentProfileSlug(def.slug);
+      }
     } catch (e) {
       setProfilesError("Не удалось загрузить список профилей");
       pushLog("error", "Список профилей: ошибка");
@@ -836,10 +861,15 @@ export const App: React.FC = () => {
     try {
       setProfilesLoading(true);
       setProfilesError(null);
-      await saveProfile(profileName.trim(), profileComment.trim());
+      const saved = await saveProfile(profileName.trim(), profileComment.trim());
+      setCurrentProfileSlug(saved.slug);
       setProfileName("");
       setProfileComment("");
       await refreshProfiles();
+      pushLog(
+        "profile_save",
+        `Профиль «${saved.name}» сохранён (slug: ${saved.slug})`
+      );
     } catch (e) {
       setProfilesError("Не удалось сохранить профиль");
       pushLog("error", "Сохранение профиля: ошибка");
@@ -853,10 +883,45 @@ export const App: React.FC = () => {
       setProfilesLoading(true);
       setProfilesError(null);
       await loadProfile(slug);
-      const [cfg, list] = await Promise.all([fetchConfig(), listProfiles()]);
+      const [cfg, list, generators] = await Promise.all([
+        fetchConfig(),
+        listProfiles(),
+        fetchSignalGenerators().catch(() => [])
+      ]);
       setConfig(cfg);
       setProfiles(list);
+      if (Array.isArray(generators)) {
+        setSignalGenerators(generators);
+      }
+      setCurrentProfileSlug(slug);
       await reloadRegisters();
+      const currentProfile =
+        list.find((p) => p.slug === slug) ?? profiles.find((p) => p.slug === slug);
+      const profileLabel = currentProfile?.name || slug;
+      pushLog("profile_load", `Профиль «${profileLabel}» загружен`);
+      if (Array.isArray(generators) && generators.length > 0) {
+        for (const g of generators) {
+          const label = g.name || g.id;
+          // Событие загрузки генератора с полной конфигурацией
+          pushLog(
+            "generator_load",
+            `Генератор «${label}» загружен из профиля «${profileLabel}». ${formatGeneratorLogParams(
+              g
+            )}`
+          );
+          // Событие включения/выключения в соответствии с последним сохранённым состоянием
+          pushLog(
+            g.enabled ? "generator_enable" : "generator_disable",
+            g.enabled
+              ? `Генератор «${label}» включён (из профиля «${profileLabel}»). ${formatGeneratorLogParams(
+                  g
+                )}`
+              : `Генератор «${label}» выключен (из профиля «${profileLabel}»). ${formatGeneratorLogParams(
+                  g
+                )}`
+          );
+        }
+      }
     } catch (e) {
       setProfilesError("Не удалось загрузить профиль");
       pushLog("error", "Загрузка профиля: ошибка");
@@ -871,9 +936,41 @@ export const App: React.FC = () => {
       setProfilesError(null);
       await deleteProfile(slug);
       await refreshProfiles();
+      if (slug === currentProfileSlug) {
+        setCurrentProfileSlug("default");
+      }
     } catch (e) {
       setProfilesError("Не удалось удалить профиль");
       pushLog("error", "Удаление профиля: ошибка");
+    }
+  };
+
+  const handleUpdateProfile = async (slug: string) => {
+    if (
+      !window.confirm(
+        "Обновить выбранный профиль из текущей конфигурации?\n" +
+          "Будут перезаписаны конфигурация, состояние регистров и генераторы."
+      )
+    ) {
+      return;
+    }
+    try {
+      setProfilesLoading(true);
+      setProfilesError(null);
+      await updateProfile(slug);
+      await refreshProfiles();
+      setCurrentProfileSlug(slug);
+      const currentProfile =
+        profiles.find((p) => p.slug === slug) ?? { name: slug, slug, comment: "" };
+      pushLog(
+        "profile_update",
+        `Профиль «${currentProfile.name}» обновлён из текущей конфигурации`
+      );
+    } catch (e) {
+      setProfilesError("Не удалось обновить профиль");
+      pushLog("error", "Обновление профиля: ошибка");
+    } finally {
+      setProfilesLoading(false);
     }
   };
 
@@ -883,6 +980,15 @@ export const App: React.FC = () => {
     server_stop: "#fdba74",
     client_connect: "#6ee7b7",
     client_disconnect: "#f97316",
+    generator_create: "#67e8f9",
+    generator_edit: "#7dd3fc",
+    generator_enable: "#4ade80",
+    generator_disable: "#fdba74",
+    generator_delete: "#f87171",
+     generator_load: "#38bdf8",
+     profile_save: "#e5e7eb",
+     profile_load: "#e5e7eb",
+     profile_update: "#e5e7eb",
     modbus_request: "#93c5fd",
     modbus_response: "#9ca3af",
     modbus_req_hex: "#7dd3fc",
@@ -1126,6 +1232,25 @@ export const App: React.FC = () => {
     return "M " + pts.join(" L ");
   };
 
+  /** Форматирование всех параметров генератора для журнала. */
+  const formatGeneratorLogParams = (g: SignalGeneratorConfig): string => {
+    return [
+      `id=${g.id}`,
+      `имя=${g.name ?? "-"}`,
+      `включен=${g.enabled ? "да" : "нет"}`,
+      `register_kind=${g.register_kind}`,
+      `start_address=${g.start_address}`,
+      `register_count=${g.register_count}`,
+      `data_type=${g.data_type}`,
+      `wave_type=${g.wave_type}`,
+      `amplitude=${g.amplitude}`,
+      `offset=${g.offset}`,
+      `frequency_hz=${g.frequency_hz}`,
+      `update_period_ms=${g.update_period_ms}`,
+      `neon_color=${g.neon_color ?? "-"}`
+    ].join("; ");
+  };
+
   const handleCreateGenerator = () => {
     setEditGeneratorFields({});
     setEditingGenerator(emptyGenerator());
@@ -1185,10 +1310,20 @@ export const App: React.FC = () => {
   };
 
   const handleDeleteGenerator = async (id: string) => {
+    const gen = signalGenerators.find((g) => g.id === id);
+    const label = gen ? gen.name || gen.id : id;
     const next = signalGenerators.filter((g) => g.id !== id);
     setSignalGenerators(next);
     try {
       await saveSignalGenerators(next);
+      if (gen) {
+        pushLog(
+          "generator_delete",
+          `Генератор «${label}» удалён. ${formatGeneratorLogParams(gen)}`
+        );
+      } else {
+        pushLog("generator_delete", `Генератор «${label}» удалён.`);
+      }
     } catch {
       pushLog("error", "Не удалось сохранить генераторы");
     }
@@ -1198,9 +1333,25 @@ export const App: React.FC = () => {
     const next = signalGenerators.map((g) =>
       g.id === id ? { ...g, enabled: !g.enabled } : g
     );
+    const gen = next.find((g) => g.id === id);
+    const label = gen ? gen.name || gen.id : id;
+    const enabled = gen?.enabled ?? false;
     setSignalGenerators(next);
     try {
       await saveSignalGenerators(next);
+      if (gen) {
+        pushLog(
+          enabled ? "generator_enable" : "generator_disable",
+          (enabled
+            ? `Генератор «${label}» включён. `
+            : `Генератор «${label}» выключен. `) + formatGeneratorLogParams(gen)
+        );
+      } else {
+        pushLog(
+          enabled ? "generator_enable" : "generator_disable",
+          enabled ? `Генератор «${label}» включён.` : `Генератор «${label}» выключен.`
+        );
+      }
     } catch {
       pushLog("error", "Не удалось сохранить генераторы");
     }
@@ -1208,6 +1359,7 @@ export const App: React.FC = () => {
 
   const handleSaveGenerator = async () => {
     if (!editingGenerator) return;
+    const label = editingGenerator.name || editingGenerator.id;
     const existingIndex = signalGenerators.findIndex((g) => g.id === editingGenerator.id);
     let next: SignalGeneratorConfig[];
     if (existingIndex === -1) {
@@ -1220,6 +1372,12 @@ export const App: React.FC = () => {
     setEditingGenerator(null);
     try {
       await saveSignalGenerators(next);
+      const action = existingIndex === -1 ? "generator_create" : "generator_edit";
+      const verb = existingIndex === -1 ? "создан" : "изменён";
+      pushLog(
+        action,
+        `Генератор «${label}» ${verb}. ${formatGeneratorLogParams(editingGenerator)}`
+      );
     } catch {
       pushLog("error", "Не удалось сохранить генераторы");
     }
@@ -1313,9 +1471,7 @@ export const App: React.FC = () => {
             <div className="panel-header">
               <div>
                 <div className="panel-title">Modbus сервер</div>
-                <div className="panel-subtitle">
-                  Старт / стоп и текущее состояние TCP‑сервера
-                </div>
+                <div className="panel-subtitle">Старт / стоп и текущее состояние TCP‑сервера</div>
               </div>
               <div className="panel-toolbar">
                 <div className="status-pill">
@@ -1370,6 +1526,16 @@ export const App: React.FC = () => {
                 >
                   Остановить
                 </button>
+              </div>
+            </div>
+
+            <div className="panel-footer">
+              <div className="panel-subtitle">
+                Текущий профиль:{" "}
+                {(() => {
+                  const current = profiles.find((p) => p.slug === currentProfileSlug);
+                  return current?.name || currentProfileSlug || "default";
+                })()}
               </div>
             </div>
           </div>
@@ -1553,7 +1719,13 @@ export const App: React.FC = () => {
 
               <ul className="profiles-list">
                 {profiles.map((p) => (
-                  <li key={p.slug} className="profiles-item">
+                  <li
+                    key={p.slug}
+                    className={
+                      "profiles-item" +
+                      (p.slug === currentProfileSlug ? " profiles-item-current" : "")
+                    }
+                  >
                     <div className="profiles-item-main">
                       <span className="profiles-name">{p.name}</span>
                       {p.comment && <span className="profiles-comment">{p.comment}</span>}
@@ -1570,11 +1742,21 @@ export const App: React.FC = () => {
                       <button
                         type="button"
                         className="btn-chip"
-                        data-variant="danger"
-                        onClick={() => void handleDeleteProfile(p.slug)}
+                        onClick={() => void handleUpdateProfile(p.slug)}
+                        disabled={profilesLoading}
                       >
-                        Удалить
+                        Обновить из текущей конфигурации
                       </button>
+                      {p.slug !== "default" && (
+                        <button
+                          type="button"
+                          className="btn-chip"
+                          data-variant="danger"
+                          onClick={() => void handleDeleteProfile(p.slug)}
+                        >
+                          Удалить
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

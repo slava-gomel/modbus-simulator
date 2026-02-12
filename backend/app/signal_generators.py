@@ -42,9 +42,10 @@ class SignalGeneratorEngine:
         """Полная замена набора генераторов."""
 
         with self._lock:
-            self._generators = [
-                _RuntimeGenerator(cfg=c) for c in configs if c.enabled
-            ]
+            # Храним все генераторы (включённые и выключенные), чтобы конфигурация
+            # полностью сохранялась в профилях и через /api/generators.
+            # Логика включения/выключения учитывается в _run_loop.
+            self._generators = [_RuntimeGenerator(cfg=c) for c in configs]
 
     def get_generators(self) -> List[SignalGeneratorConfig]:
         """Текущий набор конфигураций (копия)."""

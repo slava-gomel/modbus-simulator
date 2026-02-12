@@ -424,6 +424,12 @@ body {
     transform var(--transition-fast);
 }
 
+.profiles-item.profiles-item-current {
+  border-color: rgba(244, 244, 245, 0.95);
+  background: radial-gradient(circle at top left, rgba(244, 244, 245, 0.16), transparent 70%),
+    rgba(15, 23, 42, 0.98);
+}
+
 .profiles-item-main {
   display: flex;
   flex-direction: column;

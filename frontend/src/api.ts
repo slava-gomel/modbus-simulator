@@ -172,6 +172,12 @@ export async function deleteProfile(slug: string): Promise<void> {
   await api.delete(`/profiles/${slug}`);
 }
 
+export async function updateProfile(slug: string, comment?: string): Promise<{ slug: string; updated: boolean }> {
+  const payload = comment !== undefined ? { comment } : {};
+  const { data } = await api.post<{ slug: string; updated: boolean }>(`/profiles/${slug}/update`, payload);
+  return data;
+}
+
 export async function authRequired(): Promise<{ required: boolean }> {
   const { data } = await api.get<{ required: boolean }>("/auth/required");
   return data;

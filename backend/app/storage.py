@@ -34,6 +34,37 @@ class Storage:
     def _ensure_profiles_dir(self) -> None:
         self._cfg.storage.profiles_path.mkdir(parents=True, exist_ok=True)
 
+    def ensure_default_profile(self, core: ModbusSimulatorCore) -> None:
+        """Создать профиль 'default', если он ещё не существует.
+
+        Использует текущую конфигурацию и состояние регистров. Генераторы по умолчанию – пустой список;
+        при последующих сохранениях/обновлениях профиля generators будут перезаписаны.
+        """
+        from .models import ModbusConfigDTO  # noqa: PLC0415
+
+        self._ensure_profiles_dir()
+        path = self._cfg.storage.profiles_path / "default.yaml"
+        if path.exists():
+            return
+
+        config_dto = ModbusConfigDTO.from_config(self._cfg.modbus)
+        state = {
+            "coils": core.coils.values,
+            "discrete_inputs": core.discrete_inputs.values,
+            "holding_registers": core.holding_registers.values,
+            "input_registers": core.input_registers.values,
+        }
+        data = {
+            "name": "default",
+            "comment": "Профиль по умолчанию",
+            "config": config_dto.model_dump(),
+            "state": state,
+            "generators": [],
+        }
+        with path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        logger.info("Created default profile at %s", path)
+
     @staticmethod
     def _profile_slug(name: str) -> str:
         safe = re.sub(r"[^\w\-]", "_", name.strip()).strip("_") or "profile"
@@ -168,6 +199,54 @@ class Storage:
             yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
         logger.info("Saved profile %s to %s", name, path)
         return slug
+
+    def update_profile(
+        self,
+        slug: str,
+        core: ModbusSimulatorCore,
+        comment: str | None = None,
+        generators: List[dict] | None = None,
+    ) -> None:
+        """Обновить существующий профиль по slug из текущего состояния и конфигурации.
+
+        Сохраняет:
+        - актуальную конфигурацию Modbus (`config`)
+        - текущее состояние регистров (`state`)
+        - переданный список генераторов (или существующий из профиля, если не передан)
+        Имя профиля сохраняется таким, как было записано в файле.
+        """
+        from .models import ModbusConfigDTO  # noqa: PLC0415
+
+        self._ensure_profiles_dir()
+        path = self._cfg.storage.profiles_path / f"{slug}.yaml"
+        if not path.exists():
+            raise FileNotFoundError(f"Profile not found: {slug}")
+
+        # Читаем текущие метаданные профиля, чтобы не потерять name/comment при обновлении.
+        with path.open("r", encoding="utf-8") as f:
+            existing = yaml.safe_load(f) or {}
+
+        name = existing.get("name", slug)
+        existing_comment = existing.get("comment", "")
+        final_comment = comment if comment is not None else existing_comment
+
+        config_dto = ModbusConfigDTO.from_config(self._cfg.modbus)
+        state = {
+            "coils": core.coils.values,
+            "discrete_inputs": core.discrete_inputs.values,
+            "holding_registers": core.holding_registers.values,
+            "input_registers": core.input_registers.values,
+        }
+        data = {
+            "name": name,
+            "comment": (final_comment or "").strip(),
+            "config": config_dto.model_dump(),
+            "state": state,
+            "generators": generators if generators is not None else existing.get("generators", []),
+        }
+        with path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+        logger.info("Updated profile %s at %s", slug, path)
 
     def load_profile(self, slug: str) -> Dict[str, Any]:
         path = self._cfg.storage.profiles_path / f"{slug}.yaml"

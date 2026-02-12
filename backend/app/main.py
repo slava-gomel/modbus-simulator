@@ -144,8 +144,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Инициализируем API
+# Инициализируем API и гарантируем наличие профиля по умолчанию
 state_api.init_state_api(core, storage)
+# Создаём профиль 'default', если он ещё не существует.
+storage.ensure_default_profile(core)
 profiles_api.init_profiles_api(storage, config, core, signal_generators_engine)
 generators_api.init_generators_api(storage, signal_generators_engine)
 app.include_router(config_api.router, prefix="/api")
