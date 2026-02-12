@@ -472,6 +472,13 @@ body {
     color var(--transition-fast), transform 120ms ease-out;
 }
 
+.btn-chip[data-variant="primary"] {
+  border-color: rgba(59, 130, 246, 0.95);
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.25), transparent 70%),
+    rgba(15, 23, 42, 0.98);
+  color: #e5e7eb;
+}
+
 .btn-chip:hover {
   background: rgba(37, 99, 235, 0.14);
   border-color: rgba(59, 130, 246, 0.9);

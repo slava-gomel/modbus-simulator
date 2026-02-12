@@ -36,7 +36,7 @@ const kinds: { id: RegisterKind; label: string }[] = [
 
 type AppLogEntry = { type: string; message: string; time: string; ip?: string };
 
-type LogFilter = "all" | "modbus" | "server" | "generators" | "errors";
+type LogFilterKey = "modbus" | "server" | "generators" | "profiles" | "errors";
 
 type RegisterFormatKind = "int16" | "int32" | "int64" | "float32" | "float64" | "bitmap";
 type RegisterSign = "signed" | "unsigned";
@@ -47,9 +47,17 @@ const LogView: React.FC<{
   logColors: Record<string, string>;
   onClear: () => void;
 }> = ({ entries, logColors, onClear }) => {
-  const [filter, setFilter] = useState<LogFilter>("all");
+  const [activeFilters, setActiveFilters] = useState<LogFilterKey[]>([]);
   const [ipFilter, setIpFilter] = useState("");
   const [search, setSearch] = useState("");
+
+  const toggleFilter = (key: LogFilterKey) => {
+    setActiveFilters((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const hasFilter = (key: LogFilterKey): boolean => activeFilters.includes(key);
 
   const isVisible = (entry: AppLogEntry): boolean => {
     if (ipFilter.trim()) {
@@ -62,37 +70,62 @@ const LogView: React.FC<{
       if (!text.includes(q)) return false;
     }
 
-    if (filter === "all") return true;
-    if (filter === "modbus") {
-      return (
+    if (activeFilters.length === 0) return true;
+
+    let match = false;
+
+    if (hasFilter("modbus")) {
+      if (
         entry.type === "modbus_request" ||
         entry.type === "modbus_response" ||
         entry.type === "modbus_req_hex" ||
         entry.type === "modbus_rsp_hex"
-      );
+      ) {
+        match = true;
+      }
     }
-    if (filter === "server") {
-      return (
+
+    if (hasFilter("server")) {
+      if (
         entry.type === "server_start" ||
         entry.type === "server_stop" ||
         entry.type === "client_connect" ||
         entry.type === "client_disconnect"
-      );
+      ) {
+        match = true;
+      }
     }
-    if (filter === "generators") {
-      return (
+
+    if (hasFilter("generators")) {
+      if (
         entry.type === "generator_create" ||
         entry.type === "generator_edit" ||
         entry.type === "generator_enable" ||
         entry.type === "generator_disable" ||
         entry.type === "generator_delete" ||
         entry.type === "generator_load"
-      );
+      ) {
+        match = true;
+      }
     }
-    if (filter === "errors") {
-      return entry.type === "error";
+
+    if (hasFilter("profiles")) {
+      if (
+        entry.type === "profile_save" ||
+        entry.type === "profile_load" ||
+        entry.type === "profile_update"
+      ) {
+        match = true;
+      }
     }
-    return true;
+
+    if (hasFilter("errors")) {
+      if (entry.type === "error") {
+        match = true;
+      }
+    }
+
+    return match;
   };
 
   const filtered = entries.filter(isVisible);
@@ -112,40 +145,48 @@ const LogView: React.FC<{
               <button
                 type="button"
                 className="btn-chip"
-                data-variant={filter === "all" ? "primary" : "ghost"}
-                onClick={() => setFilter("all")}
+                data-variant={activeFilters.length === 0 ? "primary" : "ghost"}
+                onClick={() => setActiveFilters([])}
               >
                 Все
               </button>
               <button
                 type="button"
                 className="btn-chip"
-                data-variant={filter === "modbus" ? "primary" : "ghost"}
-                onClick={() => setFilter("modbus")}
+                data-variant={hasFilter("modbus") ? "primary" : "ghost"}
+                onClick={() => toggleFilter("modbus")}
               >
                 Modbus
               </button>
               <button
                 type="button"
                 className="btn-chip"
-                data-variant={filter === "server" ? "primary" : "ghost"}
-                onClick={() => setFilter("server")}
+                data-variant={hasFilter("server") ? "primary" : "ghost"}
+                onClick={() => toggleFilter("server")}
               >
                 Сервер
               </button>
               <button
                 type="button"
                 className="btn-chip"
-                data-variant={filter === "generators" ? "primary" : "ghost"}
-                onClick={() => setFilter("generators")}
+                data-variant={hasFilter("generators") ? "primary" : "ghost"}
+                onClick={() => toggleFilter("generators")}
               >
                 Генераторы
               </button>
               <button
                 type="button"
                 className="btn-chip"
-                data-variant={filter === "errors" ? "primary" : "ghost"}
-                onClick={() => setFilter("errors")}
+                data-variant={hasFilter("profiles") ? "primary" : "ghost"}
+                onClick={() => toggleFilter("profiles")}
+              >
+                Профили
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                data-variant={hasFilter("errors") ? "primary" : "ghost"}
+                onClick={() => toggleFilter("errors")}
               >
                 Ошибки
               </button>
