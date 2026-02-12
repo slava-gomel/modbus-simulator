@@ -117,6 +117,10 @@ body {
   gap: 1.2rem;
 }
 
+.panel-settings {
+  grid-column: 1 / -1;
+}
+
 .panel-registers {
   grid-column: 1 / -1;
 }
@@ -548,6 +552,16 @@ body {
   white-space: nowrap;
 }
 
+.panel-toggle {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem; /* крупнее треугольник */
+}
+
 .reg-format-option input[type="radio"] {
   margin: 0;
   width: 11px;
@@ -622,6 +636,16 @@ body {
 .bit-cell:active {
   transform: translateY(0);
   box-shadow: none;
+}
+
+.settings-grid {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.settings-grid > .panel {
+  flex: 1 1 0;
 }
 
 .registers-table-wrapper {

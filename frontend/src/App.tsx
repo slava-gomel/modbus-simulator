@@ -50,6 +50,7 @@ const LogView: React.FC<{
   const [activeFilters, setActiveFilters] = useState<LogFilterKey[]>([]);
   const [ipFilter, setIpFilter] = useState("");
   const [search, setSearch] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
 
   const toggleFilter = (key: LogFilterKey) => {
     setActiveFilters((prev) =>
@@ -136,147 +137,167 @@ const LogView: React.FC<{
         <div className="panel-header">
           <div>
             <div className="panel-title">Журнал событий</div>
-            <div className="panel-subtitle">
-              Modbus‑операции, ошибки и HEX‑трейсы — последние сверху
-            </div>
+            {!collapsed && (
+              <div className="panel-subtitle">
+                Modbus‑операции, ошибки и HEX‑трейсы — последние сверху
+              </div>
+            )}
           </div>
           <div className="panel-toolbar">
-            <div className="btn-group" style={{ marginRight: "0.5rem" }}>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={activeFilters.length === 0 ? "primary" : "ghost"}
-                onClick={() => setActiveFilters([])}
-              >
-                Все
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={hasFilter("modbus") ? "primary" : "ghost"}
-                onClick={() => toggleFilter("modbus")}
-              >
-                Modbus
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={hasFilter("server") ? "primary" : "ghost"}
-                onClick={() => toggleFilter("server")}
-              >
-                Сервер
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={hasFilter("generators") ? "primary" : "ghost"}
-                onClick={() => toggleFilter("generators")}
-              >
-                Генераторы
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={hasFilter("profiles") ? "primary" : "ghost"}
-                onClick={() => toggleFilter("profiles")}
-              >
-                Профили
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                data-variant={hasFilter("errors") ? "primary" : "ghost"}
-                onClick={() => toggleFilter("errors")}
-              >
-                Ошибки
-              </button>
-            </div>
-            <div className="input-row" style={{ marginRight: "0.5rem" }}>
-              <div className="field" style={{ minWidth: 120 }}>
-                <label className="field-label" htmlFor="log-ip-filter">
-                  IP
-                </label>
-                <input
-                  id="log-ip-filter"
-                  className="field-input"
-                  type="text"
-                  placeholder="192.168.0."
-                  value={ipFilter}
-                  onChange={(e) => setIpFilter(e.target.value)}
-                />
-              </div>
-              <div className="field" style={{ minWidth: 160 }}>
-                <label className="field-label" htmlFor="log-search">
-                  Поиск
-                </label>
-                <input
-                  id="log-search"
-                  className="field-input"
-                  type="text"
-                  placeholder="FC16, addr=0, error…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
+            {!collapsed && (
+              <>
+                <div className="btn-group" style={{ marginRight: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={activeFilters.length === 0 ? "primary" : "ghost"}
+                    onClick={() => setActiveFilters([])}
+                  >
+                    Все
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={hasFilter("modbus") ? "primary" : "ghost"}
+                    onClick={() => toggleFilter("modbus")}
+                  >
+                    Modbus
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={hasFilter("server") ? "primary" : "ghost"}
+                    onClick={() => toggleFilter("server")}
+                  >
+                    Сервер
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={hasFilter("generators") ? "primary" : "ghost"}
+                    onClick={() => toggleFilter("generators")}
+                  >
+                    Генераторы
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={hasFilter("profiles") ? "primary" : "ghost"}
+                    onClick={() => toggleFilter("profiles")}
+                  >
+                    Профили
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-chip"
+                    data-variant={hasFilter("errors") ? "primary" : "ghost"}
+                    onClick={() => toggleFilter("errors")}
+                  >
+                    Ошибки
+                  </button>
+                </div>
+                <div className="input-row" style={{ marginRight: "0.5rem" }}>
+                  <div className="field" style={{ minWidth: 120 }}>
+                    <label className="field-label" htmlFor="log-ip-filter">
+                      IP
+                    </label>
+                    <input
+                      id="log-ip-filter"
+                      className="field-input"
+                      type="text"
+                      placeholder="192.168.0."
+                      value={ipFilter}
+                      onChange={(e) => setIpFilter(e.target.value)}
+                    />
+                  </div>
+                  <div className="field" style={{ minWidth: 160 }}>
+                    <label className="field-label" htmlFor="log-search">
+                      Поиск
+                    </label>
+                    <input
+                      id="log-search"
+                      className="field-input"
+                      type="text"
+                      placeholder="FC16, addr=0, error…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon"
+                  onClick={() => {
+                    if (filtered.length === 0) return;
+                    const payload = {
+                      exported_at: new Date().toISOString(),
+                      filters: activeFilters,
+                      ipFilter: ipFilter.trim() || null,
+                      search: search.trim() || null,
+                      entries: filtered
+                    };
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                      type: "application/json"
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+                    a.href = url;
+                    a.download = `modbus-log-${ts}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Экспорт JSON
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon"
+                  onClick={onClear}
+                >
+                  Очистить
+                </button>
+              </>
+            )}
             <button
               type="button"
-              className="btn btn-sm btn-icon"
-              onClick={() => {
-                if (filtered.length === 0) return;
-                const payload = {
-                  exported_at: new Date().toISOString(),
-                  filter,
-                  ipFilter: ipFilter.trim() || null,
-                  search: search.trim() || null,
-                  entries: filtered
-                };
-                const blob = new Blob([JSON.stringify(payload, null, 2)], {
-                  type: "application/json"
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                const ts = new Date().toISOString().replace(/[:.]/g, "-");
-                a.href = url;
-                a.download = `modbus-log-${ts}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-              }}
+              className="btn btn-sm btn-icon panel-toggle"
+              onClick={() => setCollapsed((v) => !v)}
+              aria-label={collapsed ? "Развернуть журнал" : "Свернуть журнал"}
             >
-              Экспорт JSON
-            </button>
-            <button type="button" className="btn btn-sm btn-icon" onClick={onClear}>
-              Очистить
+              {collapsed ? "▸" : "▾"}
             </button>
           </div>
         </div>
-        <div className="log-container">
-          {filtered.length === 0 ? (
-            <div className="log-empty">Нет записей журнала</div>
-          ) : (
-            [...filtered].reverse().map((entry, i) => {
-              const d = new Date(entry.time);
-              const base = d.toLocaleTimeString("ru-RU", { hour12: false });
-              const ms = String(d.getMilliseconds()).padStart(3, "0");
-              const timeText = `${base}.${ms}`;
-              return (
-                <div
-                  key={i}
-                  className="log-line"
-                  style={{ color: logColors[entry.type] ?? "#e5e7eb" }}
-                >
-                  <div className="log-time">{timeText}</div>
-                  <div className="log-message">
-                    <span className="badge-log-type">{entry.type}</span>
-                    {entry.message}
+        {!collapsed && (
+          <div className="log-container">
+            {filtered.length === 0 ? (
+              <div className="log-empty">Нет записей журнала</div>
+            ) : (
+              [...filtered].reverse().map((entry, i) => {
+                const d = new Date(entry.time);
+                const base = d.toLocaleTimeString("ru-RU", { hour12: false });
+                const ms = String(d.getMilliseconds()).padStart(3, "0");
+                const timeText = `${base}.${ms}`;
+                return (
+                  <div
+                    key={i}
+                    className="log-line"
+                    style={{ color: logColors[entry.type] ?? "#e5e7eb" }}
+                  >
+                    <div className="log-time">{timeText}</div>
+                    <div className="log-message">
+                      <span className="badge-log-type">{entry.type}</span>
+                      {entry.message}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -326,6 +347,14 @@ export const App: React.FC = () => {
   const [generatorChartSamples, setGeneratorChartSamples] = useState<Record<string, number[]>>({});
   const GENERATOR_CHART_MAX_SAMPLES = 80;
   const GENERATOR_CHART_POLL_MS = 120;
+
+  // Сворачивание панелей
+  const [collapsedSettings, setCollapsedSettings] = useState(false);
+  const [collapsedServer, setCollapsedServer] = useState(false);
+  const [collapsedConfig, setCollapsedConfig] = useState(false);
+  const [collapsedProfiles, setCollapsedProfiles] = useState(false);
+  const [collapsedRegisters, setCollapsedRegisters] = useState(false);
+  const [collapsedGenerators, setCollapsedGenerators] = useState(false);
 
   const pushLog = (type: string, message: string) => {
     window.dispatchEvent(
@@ -1506,295 +1535,337 @@ export const App: React.FC = () => {
       </header>
 
       <main className="layout-grid">
-        {/* Левая колонка: сервер + конфиг + профили */}
-        <section className="panel panel-server">
+        {/* Левая колонка: настройки (сервер, конфигурация, профили) */}
+        <section className="panel panel-settings">
           <div className="panel-inner">
             <div className="panel-header">
               <div>
-                <div className="panel-title">Modbus сервер</div>
-                <div className="panel-subtitle">Старт / стоп и текущее состояние TCP‑сервера</div>
-              </div>
-              <div className="panel-toolbar">
-                <div className="status-pill">
-                  <span
-                    className="status-dot"
-                    data-state={serverStatus?.running ? "running" : "stopped"}
-                  />
-                  <span className="status-label">
-                    {serverStatus?.running ? "запущен" : "остановлен"}
-                  </span>
-                  {serverStatus && (
-                    <span className="status-meta">
-                      {serverStatus.host}:{serverStatus.port}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {serverStatus?.error && (
-              <div className="error-text">
-                <span className="error-dot" />
-                {serverStatus.error}
-              </div>
-            )}
-
-            <div className="panel-section">
-              <div className="btn-group">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => void handleServerStart()}
-                  disabled={serverLoading || !!serverStatus?.running}
-                >
-                  <span data-dot="" />
-                  Запустить сервер
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  data-variant="danger"
-                  onClick={() => void handleServerStop()}
-                  disabled={serverLoading || !serverStatus?.running}
-                >
-                  Остановить
-                </button>
-              </div>
-            </div>
-
-            <div className="panel-footer">
-              <div className="panel-subtitle">
-                Текущий профиль:{" "}
-                {(() => {
-                  const current = profiles.find((p) => p.slug === currentProfileSlug);
-                  return current?.name || currentProfileSlug || "default";
-                })()}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel panel-config">
-          <div className="panel-inner">
-            <div className="panel-header">
-              <div>
-                <div className="panel-title">Конфигурация сервера</div>
-                <div className="panel-subtitle">
-                  Хост, порт и размеры областей регистров
-                </div>
-              </div>
-            </div>
-
-            {configLoading && <div className="panel-subtitle">Загрузка конфигурации…</div>}
-            {configError && (
-              <div className="error-text">
-                <span className="error-dot" />
-                {configError}
-              </div>
-            )}
-
-            {config && (
-              <div className="panel-section">
-                <div className="input-row">
-                  <div className="field">
-                    <label className="field-label" htmlFor="cfg-host">
-                      Host
-                    </label>
-                    <input
-                      id="cfg-host"
-                      className="field-input"
-                      type="text"
-                      value={config.host}
-                      onChange={(e) => setConfig({ ...config, host: e.target.value })}
-                    />
+                <div className="panel-title">Настройки</div>
+                {!collapsedSettings && (
+                  <div className="panel-subtitle">
+                    Запуск сервера, конфигурация и сохранённые профили
                   </div>
-                  <div className="field">
-                    <label className="field-label" htmlFor="cfg-port">
-                      Port
-                    </label>
-                    <input
-                      id="cfg-port"
-                      className="field-input"
-                      type="number"
-                      value={config.port}
-                      onChange={(e) =>
-                        setConfig({ ...config, port: Number(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="field-label" htmlFor="cfg-unit">
-                      Unit ID
-                    </label>
-                    <input
-                      id="cfg-unit"
-                      className="field-input"
-                      type="number"
-                      value={config.unit_id}
-                      onChange={(e) =>
-                        setConfig({ ...config, unit_id: Number(e.target.value) || 0 })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="input-row">
-                  <div className="field">
-                    <label className="field-label" htmlFor="cfg-coils">
-                      Coils size
-                    </label>
-                    <input
-                      id="cfg-coils"
-                      className="field-input"
-                      type="number"
-                      value={config.coils_size}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          coils_size: Number(e.target.value) || 0
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="field-label" htmlFor="cfg-holding">
-                      Holding size
-                    </label>
-                    <input
-                      id="cfg-holding"
-                      className="field-input"
-                      type="number"
-                      value={config.holding_registers_size}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          holding_registers_size: Number(e.target.value) || 0
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-                <div>
-                  <button type="button" className="btn btn-sm" onClick={handleConfigSave}>
-                    Сохранить конфигурацию
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="panel panel-profiles">
-          <div className="panel-inner">
-            <div className="panel-header">
-              <div>
-                <div className="panel-title">Профили</div>
-                <div className="panel-subtitle">
-                  Сохраняйте и переключайте наборы конфигурации и регистров
-                </div>
+                )}
               </div>
               <div className="panel-toolbar">
                 <button
                   type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={() => void refreshProfiles()}
+                  className="btn btn-sm btn-icon panel-toggle"
+                  onClick={() => setCollapsedSettings((v) => !v)}
+                  aria-label={collapsedSettings ? "Развернуть настройки" : "Свернуть настройки"}
                 >
-                  Обновить список
+                  {collapsedSettings ? "▸" : "▾"}
                 </button>
               </div>
             </div>
 
-            {profilesError && (
-              <div className="error-text">
-                <span className="error-dot" />
-                {profilesError}
-              </div>
-            )}
-
-            <div className="panel-section">
-              <div className="input-row">
-                <div className="field" style={{ flex: 1 }}>
-                  <label className="field-label" htmlFor="profile-name">
-                    Имя профиля
-                  </label>
-                  <input
-                    id="profile-name"
-                    className="field-input"
-                    type="text"
-                    placeholder="Например: demo‑проект"
-                    value={profileName}
-                    onChange={(e) => setProfileName(e.target.value)}
-                  />
-                </div>
-                <div className="field" style={{ flex: 1 }}>
-                  <label className="field-label" htmlFor="profile-comment">
-                    Комментарий
-                  </label>
-                  <input
-                    id="profile-comment"
-                    className="field-input"
-                    type="text"
-                    placeholder="Опционально"
-                    value={profileComment}
-                    onChange={(e) => setProfileComment(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => void handleSaveProfile()}
-                  disabled={profilesLoading || !profileName.trim()}
-                >
-                  Сохранить текущий профиль
-                </button>
-              </div>
-
-              <ul className="profiles-list">
-                {profiles.map((p) => (
-                  <li
-                    key={p.slug}
-                    className={
-                      "profiles-item" +
-                      (p.slug === currentProfileSlug ? " profiles-item-current" : "")
-                    }
-                  >
-                    <div className="profiles-item-main">
-                      <span className="profiles-name">{p.name}</span>
-                      {p.comment && <span className="profiles-comment">{p.comment}</span>}
+            {!collapsedSettings && (
+              <div className="settings-grid">
+                {/* Modbus сервер */}
+                <section className="panel panel-server">
+                  <div className="panel-inner">
+                    <div className="panel-header">
+                      <div>
+                        <div className="panel-title">Modbus сервер</div>
+                        <div className="panel-subtitle">
+                          Старт / стоп и текущее состояние TCP‑сервера
+                        </div>
+                      </div>
+                      <div className="panel-toolbar">
+                        <div className="status-pill">
+                          <span
+                            className="status-dot"
+                            data-state={serverStatus?.running ? "running" : "stopped"}
+                          />
+                          <span className="status-label">
+                            {serverStatus?.running ? "запущен" : "остановлен"}
+                          </span>
+                          {serverStatus && (
+                            <span className="status-meta">
+                              {serverStatus.host}:{serverStatus.port}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="profiles-actions">
-                      <button
-                        type="button"
-                        className="btn-chip"
-                        onClick={() => void handleLoadProfile(p.slug)}
-                        disabled={profilesLoading}
-                      >
-                        Загрузить
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-chip"
-                        onClick={() => void handleUpdateProfile(p.slug)}
-                        disabled={profilesLoading}
-                      >
-                        Обновить из текущей конфигурации
-                      </button>
-                      {p.slug !== "default" && (
+
+                    {serverStatus?.error && (
+                      <div className="error-text">
+                        <span className="error-dot" />
+                        {serverStatus.error}
+                      </div>
+                    )}
+
+                    <div className="panel-section">
+                      <div className="btn-group">
                         <button
                           type="button"
-                          className="btn-chip"
-                          data-variant="danger"
-                          onClick={() => void handleDeleteProfile(p.slug)}
+                          className="btn btn-sm"
+                          onClick={() => void handleServerStart()}
+                          disabled={serverLoading || !!serverStatus?.running}
                         >
-                          Удалить
+                          <span data-dot="" />
+                          Запустить сервер
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          data-variant="danger"
+                          onClick={() => void handleServerStop()}
+                          disabled={serverLoading || !serverStatus?.running}
+                        >
+                          Остановить
+                        </button>
+                      </div>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
+
+                    <div className="panel-footer">
+                      <div className="panel-subtitle">
+                        Текущий профиль:{" "}
+                        {(() => {
+                          const current = profiles.find((p) => p.slug === currentProfileSlug);
+                          return current?.name || currentProfileSlug || "default";
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Конфигурация сервера */}
+                <section className="panel panel-config">
+                  <div className="panel-inner">
+                    <div className="panel-header">
+                      <div>
+                        <div className="panel-title">Конфигурация сервера</div>
+                        <div className="panel-subtitle">
+                          Хост, порт и размеры областей регистров
+                        </div>
+                      </div>
+                    </div>
+
+                    {configLoading && (
+                      <div className="panel-subtitle">Загрузка конфигурации…</div>
+                    )}
+                    {configError && (
+                      <div className="error-text">
+                        <span className="error-dot" />
+                        {configError}
+                      </div>
+                    )}
+
+                    {config && (
+                      <div className="panel-section">
+                        <div className="input-row">
+                          <div className="field">
+                            <label className="field-label" htmlFor="cfg-host">
+                              Host
+                            </label>
+                            <input
+                              id="cfg-host"
+                              className="field-input"
+                              type="text"
+                              value={config.host}
+                              onChange={(e) => setConfig({ ...config, host: e.target.value })}
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="field-label" htmlFor="cfg-port">
+                              Port
+                            </label>
+                            <input
+                              id="cfg-port"
+                              className="field-input"
+                              type="number"
+                              value={config.port}
+                              onChange={(e) =>
+                                setConfig({ ...config, port: Number(e.target.value) || 0 })
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="field-label" htmlFor="cfg-unit">
+                              Unit ID
+                            </label>
+                            <input
+                              id="cfg-unit"
+                              className="field-input"
+                              type="number"
+                              value={config.unit_id}
+                              onChange={(e) =>
+                                setConfig({ ...config, unit_id: Number(e.target.value) || 0 })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="input-row">
+                          <div className="field">
+                            <label className="field-label" htmlFor="cfg-coils">
+                              Coils size
+                            </label>
+                            <input
+                              id="cfg-coils"
+                              className="field-input"
+                              type="number"
+                              value={config.coils_size}
+                              onChange={(e) =>
+                                setConfig({
+                                  ...config,
+                                  coils_size: Number(e.target.value) || 0
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="field">
+                            <label className="field-label" htmlFor="cfg-holding">
+                              Holding size
+                            </label>
+                            <input
+                              id="cfg-holding"
+                              className="field-input"
+                              type="number"
+                              value={config.holding_registers_size}
+                              onChange={(e) =>
+                                setConfig({
+                                  ...config,
+                                  holding_registers_size: Number(e.target.value) || 0
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={handleConfigSave}
+                          >
+                            Сохранить конфигурацию
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Профили */}
+                <section className="panel panel-profiles">
+                  <div className="panel-inner">
+                    <div className="panel-header">
+                      <div>
+                        <div className="panel-title">Профили</div>
+                        <div className="panel-subtitle">
+                          Сохраняйте и переключайте наборы конфигурации и регистров
+                        </div>
+                      </div>
+                      <div className="panel-toolbar">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-icon"
+                          onClick={() => void refreshProfiles()}
+                        >
+                          Обновить список
+                        </button>
+                      </div>
+                    </div>
+
+                    {profilesError && (
+                      <div className="error-text">
+                        <span className="error-dot" />
+                        {profilesError}
+                      </div>
+                    )}
+
+                    <div className="panel-section">
+                      <div className="input-row">
+                        <div className="field" style={{ flex: 1 }}>
+                          <label className="field-label" htmlFor="profile-name">
+                            Имя профиля
+                          </label>
+                          <input
+                            id="profile-name"
+                            className="field-input"
+                            type="text"
+                            placeholder="Например: demo‑проект"
+                            value={profileName}
+                            onChange={(e) => setProfileName(e.target.value)}
+                          />
+                        </div>
+                        <div className="field" style={{ flex: 1 }}>
+                          <label className="field-label" htmlFor="profile-comment">
+                            Комментарий
+                          </label>
+                          <input
+                            id="profile-comment"
+                            className="field-input"
+                            type="text"
+                            placeholder="Опционально"
+                            value={profileComment}
+                            onChange={(e) => setProfileComment(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => void handleSaveProfile()}
+                          disabled={profilesLoading || !profileName.trim()}
+                        >
+                          Сохранить текущий профиль
+                        </button>
+                      </div>
+
+                      <ul className="profiles-list">
+                        {profiles.map((p) => (
+                          <li
+                            key={p.slug}
+                            className={
+                              "profiles-item" +
+                              (p.slug === currentProfileSlug ? " profiles-item-current" : "")
+                            }
+                          >
+                            <div className="profiles-item-main">
+                              <span className="profiles-name">{p.name}</span>
+                              {p.comment && (
+                                <span className="profiles-comment">{p.comment}</span>
+                              )}
+                            </div>
+                            <div className="profiles-actions">
+                              <button
+                                type="button"
+                                className="btn-chip"
+                                onClick={() => void handleLoadProfile(p.slug)}
+                                disabled={profilesLoading}
+                              >
+                                Загрузить
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-chip"
+                                onClick={() => void handleUpdateProfile(p.slug)}
+                                disabled={profilesLoading}
+                              >
+                                Обновить из текущей конфигурации
+                              </button>
+                              {p.slug !== "default" && (
+                                <button
+                                  type="button"
+                                  className="btn-chip"
+                                  data-variant="danger"
+                                  onClick={() => void handleDeleteProfile(p.slug)}
+                                >
+                                  Удалить
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
           </div>
         </section>
 
@@ -1804,12 +1875,26 @@ export const App: React.FC = () => {
             <div className="panel-header">
               <div>
                 <div className="panel-title">Регистры</div>
-                <div className="panel-subtitle">
-                  Чтение и запись диапазонов регистров, пресеты и batch‑операции
-                </div>
+                {!collapsedRegisters && (
+                  <div className="panel-subtitle">
+                    Чтение и запись диапазонов регистров, пресеты и batch‑операции
+                  </div>
+                )}
+              </div>
+              <div className="panel-toolbar">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-icon panel-toggle"
+                  onClick={() => setCollapsedRegisters((v) => !v)}
+                  aria-label={collapsedRegisters ? "Развернуть регистры" : "Свернуть регистры"}
+                >
+                  {collapsedRegisters ? "▸" : "▾"}
+                </button>
               </div>
             </div>
 
+            {!collapsedRegisters && (
+              <>
             <div className="registers-toolbar">
               <div className="field">
                 <label className="field-label" htmlFor="reg-kind">
@@ -2193,27 +2278,44 @@ export const App: React.FC = () => {
               </div>
             )}
 
+              </>
+            )}
+
             {/* Панель генератора сигналов */}
             <div className="panel-section signal-generator-panel">
               <div className="panel-header">
                 <div>
                   <div className="panel-title">Генератор сигналов</div>
-                  <div className="panel-subtitle">
-                    Автоматическое обновление holding‑регистров по заданному сигналу (INT16 / FLOAT32 / FLOAT64)
-                  </div>
+                  {!collapsedGenerators && (
+                    <div className="panel-subtitle">
+                      Автоматическое обновление holding‑регистров по заданному сигналу (INT16 / FLOAT32 / FLOAT64)
+                    </div>
+                  )}
                 </div>
                 <div className="panel-toolbar">
+                  {!collapsedGenerators && (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={handleCreateGenerator}
+                    >
+                      <span data-dot="" />
+                      Добавить генератор
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className="btn btn-sm"
-                    onClick={handleCreateGenerator}
+                    className="btn btn-sm btn-icon panel-toggle"
+                    onClick={() => setCollapsedGenerators((v) => !v)}
+                    aria-label={collapsedGenerators ? "Развернуть генераторы" : "Свернуть генераторы"}
                   >
-                    <span data-dot="" />
-                    Добавить генератор
+                    {collapsedGenerators ? "▸" : "▾"}
                   </button>
                 </div>
               </div>
 
+              {!collapsedGenerators && (
+                <>
               {editingGenerator && (
                 <div className="signal-generator-form">
                   <div className="input-row">
@@ -2535,6 +2637,9 @@ export const App: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+              )}
+
+                </>
               )}
             </div>
           </div>
