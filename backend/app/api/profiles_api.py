@@ -6,10 +6,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..config import AppConfig
-from ..models import ModbusConfigDTO
+from ..models import ModbusConfigDTO, SignalGeneratorConfig
 
 if TYPE_CHECKING:
     from ..modbus_core import ModbusSimulatorCore
+    from ..signal_generators import SignalGeneratorEngine
     from ..storage import Storage
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
@@ -17,19 +18,27 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 _storage: "Storage | None" = None
 _config: AppConfig | None = None
 _core: "ModbusSimulatorCore | None" = None
+_engine: "SignalGeneratorEngine | None" = None
 
 
-def init_profiles_api(storage: "Storage", config: AppConfig, core: "ModbusSimulatorCore") -> None:
-    global _storage, _config, _core  # noqa: PLW0603
+def init_profiles_api(
+    storage: "Storage",
+    config: AppConfig,
+    core: "ModbusSimulatorCore",
+    engine: "SignalGeneratorEngine",
+) -> None:
+    global _storage, _config, _core, _engine  # noqa: PLW0603
     _storage = storage
     _config = config
     _core = core
+    _engine = engine
 
 
-def _get_deps() -> tuple["Storage", AppConfig, "ModbusSimulatorCore"]:
+def _get_deps() -> tuple["Storage", AppConfig, "ModbusSimulatorCore", "SignalGeneratorEngine | None"]:
     if _storage is None or _config is None or _core is None:
         raise RuntimeError("Profiles API not initialized")
-    return _storage, _config, _core
+    # _engine может быть None только в теории, но для надёжности возвращаем его как опциональный.
+    return _storage, _config, _core, _engine
 
 
 class ProfileSaveRequest(BaseModel):
@@ -39,20 +48,24 @@ class ProfileSaveRequest(BaseModel):
 
 @router.get("", response_model=list)
 def list_profiles() -> list:
-    storage, _, _ = _get_deps()
+    storage, _, _, _ = _get_deps()
     return storage.list_profiles()
 
 
 @router.post("", response_model=dict)
 def save_profile(body: ProfileSaveRequest) -> dict:
-    storage, _, core = _get_deps()
-    slug = storage.save_profile(body.name, core, body.comment)
+    storage, _, core, engine = _get_deps()
+    # При сохранении профиля сохраняем текущий набор генераторов (если движок инициализирован).
+    generators_data: list[dict] = []
+    if engine is not None:
+        generators_data = [g.model_dump() for g in engine.get_generators()]
+    slug = storage.save_profile(body.name, core, body.comment, generators=generators_data)
     return {"slug": slug, "name": body.name.strip() or slug}
 
 
 @router.delete("/{slug}")
 def delete_profile(slug: str) -> None:
-    storage, _, _ = _get_deps()
+    storage, _, _, _ = _get_deps()
     try:
         storage.delete_profile(slug)
     except FileNotFoundError as e:
@@ -61,17 +74,30 @@ def delete_profile(slug: str) -> None:
 
 @router.post("/{slug}/load", response_model=dict)
 def load_profile(slug: str) -> dict:
-    storage, config, core = _get_deps()
+    storage, config, core, engine = _get_deps()
     try:
         data = storage.load_profile(slug)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     cfg = data.get("config")
     state = data.get("state")
+    generators_raw = data.get("generators") or []
     if cfg:
         config.modbus = ModbusConfigDTO(**cfg).to_config()
         storage.save_config()
     if state and isinstance(state, dict):
         storage._apply_state(core, state)
         storage.save_state(core)
+    # Восстанавливаем генераторы, если есть движок и конфигурация в профиле
+    if engine is not None and isinstance(generators_raw, list):
+        try:
+            generators = [
+                SignalGeneratorConfig(**item)
+                for item in generators_raw
+                if isinstance(item, dict)
+            ]
+            engine.set_generators(generators)
+        except Exception:
+            # Не валим загрузку профиля, если generators повреждены – просто игнорируем.
+            pass
     return {"slug": slug, "loaded": True}

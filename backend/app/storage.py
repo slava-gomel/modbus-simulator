@@ -20,6 +20,7 @@ class Storage:
 
     - `config.yaml` – настройки Modbus (порт, размеры областей и т.п.).
     - `state.json` – текущее состояние регистров.
+    - `profiles/*.yaml` – профили, содержащие config/state и, опционально, generators.
     """
 
     def __init__(self, cfg: AppConfig) -> None:
@@ -138,7 +139,11 @@ class Storage:
         return result
 
     def save_profile(
-        self, name: str, core: ModbusSimulatorCore, comment: str = ""
+        self,
+        name: str,
+        core: ModbusSimulatorCore,
+        comment: str = "",
+        generators: List[dict] | None = None,
     ) -> str:
         from .models import ModbusConfigDTO  # noqa: PLC0415
         self._ensure_profiles_dir()
@@ -156,6 +161,8 @@ class Storage:
             "comment": comment.strip(),
             "config": config_dto.model_dump(),
             "state": state,
+            # список генераторов сигналов, связанных с профилем (может быть пустым)
+            "generators": generators or [],
         }
         with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)

@@ -32,6 +32,30 @@ export interface RegisterRangeResponse {
   values: number[];
 }
 
+export type SignalWaveType = "sine" | "saw" | "square" | "constant";
+export type SignalDataType = "int16" | "float32" | "float64";
+
+export interface SignalGeneratorConfig {
+  id: string;
+  enabled: boolean;
+  name?: string | null;
+  register_kind: "holding";
+  start_address: number;
+  register_count: number;
+  data_type: SignalDataType;
+  wave_type: SignalWaveType;
+  amplitude: number;
+  offset: number;
+  frequency_hz: number;
+  update_period_ms: number;
+  /** Цвет неоновой подсветки рамки значения (hex, например #00ff88). */
+  neon_color?: string | null;
+}
+
+export interface GeneratorsPayload {
+  generators: SignalGeneratorConfig[];
+}
+
 export interface ServerStatus {
   running: boolean;
   host: string;
@@ -101,6 +125,16 @@ export async function fetchModbusLog(since: number): Promise<{ events: ModbusLog
     params: { since }
   });
   return data;
+}
+
+export async function fetchSignalGenerators(): Promise<SignalGeneratorConfig[]> {
+  const { data } = await api.get<GeneratorsPayload>("/generators");
+  return data.generators;
+}
+
+export async function saveSignalGenerators(generators: SignalGeneratorConfig[]): Promise<SignalGeneratorConfig[]> {
+  const { data } = await api.put<GeneratorsPayload>("/generators", { generators });
+  return data.generators;
 }
 
 export async function startServer(): Promise<ServerStatus> {

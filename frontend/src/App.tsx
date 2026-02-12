@@ -6,14 +6,19 @@ import {
   fetchModbusLog,
   fetchRegisters,
   fetchServerStatus,
+  fetchSignalGenerators,
   listProfiles,
   loadProfile,
   ModbusConfigDto,
   ProfileItem,
   RegisterKind,
   saveProfile,
+  saveSignalGenerators,
   setAuth,
   ServerStatus,
+  SignalGeneratorConfig,
+  SignalWaveType,
+  SignalDataType,
   startServer,
   stopServer,
   updateConfig,
@@ -251,6 +256,10 @@ export const App: React.FC = () => {
   const [editHolding, setEditHolding] = useState<Record<number, string>>({});
   const MAX_LOG_ENTRIES = 300;
 
+  const [signalGenerators, setSignalGenerators] = useState<SignalGeneratorConfig[]>([]);
+  const [editingGenerator, setEditingGenerator] = useState<SignalGeneratorConfig | null>(null);
+  const [generatorValues, setGeneratorValues] = useState<Record<string, number[]>>({});
+
   const pushLog = (type: string, message: string) => {
     window.dispatchEvent(
       new CustomEvent("app:log", { detail: { type, message } })
@@ -261,10 +270,11 @@ export const App: React.FC = () => {
     try {
       setConfigLoading(true);
       setConfigError(null);
-      const [cfg, status, profileList] = await Promise.all([
+      const [cfg, status, profileList, generators] = await Promise.all([
         fetchConfig(),
         fetchServerStatus().catch(() => null),
-        listProfiles().catch(() => [])
+        listProfiles().catch(() => []),
+        fetchSignalGenerators().catch(() => [])
       ]);
       setConfig(cfg);
       if (status) {
@@ -272,6 +282,7 @@ export const App: React.FC = () => {
         setServerStatus(status);
       }
       if (Array.isArray(profileList)) setProfiles(profileList);
+      if (Array.isArray(generators)) setSignalGenerators(generators);
     } catch (e) {
       setConfigError("Не удалось загрузить конфигурацию");
       pushLog("error", "Загрузка конфигурации: ошибка");
@@ -341,17 +352,21 @@ export const App: React.FC = () => {
     }
   };
 
-  const reloadRegisters = async () => {
+  const reloadRegisters = async (silent = false) => {
     try {
-      setStateLoading(true);
-      setStateError(null);
+      if (!silent) {
+        setStateLoading(true);
+        setStateError(null);
+      }
       const data = await fetchRegisters(selectedKind, start, count);
       setValues(data.values);
     } catch (e) {
-      setStateError("Не удалось загрузить значения регистров");
-      pushLog("error", "Загрузка регистров: ошибка");
+      if (!silent) {
+        setStateError("Не удалось загрузить значения регистров");
+        pushLog("error", "Загрузка регистров: ошибка");
+      }
     } finally {
-      setStateLoading(false);
+      if (!silent) setStateLoading(false);
     }
   };
 
@@ -359,6 +374,39 @@ export const App: React.FC = () => {
     void reloadRegisters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKind]);
+
+  // Автообновление значений регистров (для отображения изменений от генератора сигналов и т.п.)
+  const REGISTERS_AUTO_REFRESH_MS = 1500;
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void reloadRegisters(true);
+    }, REGISTERS_AUTO_REFRESH_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKind, start, count]);
+
+  // Подгрузка текущих значений по адресам генераторов для отображения в блоке генераторов
+  useEffect(() => {
+    if (signalGenerators.length === 0) {
+      setGeneratorValues({});
+      return;
+    }
+    const fetchAll = async () => {
+      const next: Record<string, number[]> = {};
+      for (const g of signalGenerators) {
+        try {
+          const data = await fetchRegisters("holding", g.start_address, g.register_count);
+          next[g.id] = data.values;
+        } catch {
+          next[g.id] = [];
+        }
+      }
+      setGeneratorValues((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    };
+    void fetchAll();
+    const interval = setInterval(fetchAll, REGISTERS_AUTO_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [signalGenerators]);
 
   const prevServerRunningRef = useRef<boolean | null>(null);
   const modbusLogSinceRef = useRef<number>(0);
@@ -935,6 +983,132 @@ export const App: React.FC = () => {
     }
 
     return String(unsigned16);
+  };
+
+  /** Форматирование значения генератора по его data_type (порядок слов ABCD как в бэкенде). */
+  const formatGeneratorValue = (g: SignalGeneratorConfig, rawValues: number[]): string => {
+    if (!rawValues.length) return "—";
+    const regs = rawValues.map((v) => v & 0xffff);
+    if (g.data_type === "int16") {
+      const v = regs[0];
+      return String(v > 0x7fff ? v - 0x10000 : v);
+    }
+    if (g.data_type === "float32" && regs.length >= 2) {
+      const word = (regs[0] << 16) | regs[1];
+      const buf = new ArrayBuffer(4);
+      const view = new DataView(buf);
+      view.setUint32(0, word >>> 0);
+      const f = view.getFloat32(0);
+      return Number.isFinite(f) ? f.toString() : "NaN";
+    }
+    if (g.data_type === "float64" && regs.length >= 4) {
+      const buf = new ArrayBuffer(8);
+      const view = new DataView(buf);
+      view.setUint16(0, regs[0]);
+      view.setUint16(2, regs[1]);
+      view.setUint16(4, regs[2]);
+      view.setUint16(6, regs[3]);
+      const f = view.getFloat64(0);
+      return Number.isFinite(f) ? f.toString() : "NaN";
+    }
+    return "—";
+  };
+
+  const DEFAULT_NEON_COLOR = "#00ff88";
+
+  const emptyGenerator = (): SignalGeneratorConfig => ({
+    id: `gen-${Date.now()}`,
+    enabled: true,
+    name: "",
+    register_kind: "holding",
+    start_address: 0,
+    register_count: 1,
+    data_type: "int16",
+    wave_type: "sine",
+    amplitude: 1,
+    offset: 0,
+    frequency_hz: 1,
+    update_period_ms: 100,
+    neon_color: DEFAULT_NEON_COLOR
+  });
+
+  const neonGlowStyle = (hex: string | null | undefined): React.CSSProperties => {
+    const color = hex && /^#[0-9A-Fa-f]{6}$/.test(hex) ? hex : DEFAULT_NEON_COLOR;
+    return {
+      borderColor: color,
+      boxShadow: `0 0 6px ${color}, 0 0 12px ${color}, 0 0 20px ${color}`,
+    };
+  };
+
+  /** Цвет подсветки для диапазона регистров, если его затрагивает включённый генератор (только holding). */
+  const getGeneratorHighlightForRange = (
+    addrStart: number,
+    registerCount: number
+  ): string | null => {
+    for (const g of signalGenerators) {
+      if (!g.enabled || g.register_kind !== "holding") continue;
+      const genEnd = g.start_address + g.register_count;
+      if (addrStart < genEnd && addrStart + registerCount > g.start_address) {
+        return g.neon_color ?? DEFAULT_NEON_COLOR;
+      }
+    }
+    return null;
+  };
+
+  const handleCreateGenerator = () => {
+    setEditingGenerator(emptyGenerator());
+  };
+
+  const handleEditGenerator = (id: string) => {
+    const found = signalGenerators.find((g) => g.id === id);
+    if (found) {
+      setEditingGenerator({ ...found });
+    }
+  };
+
+  const handleDeleteGenerator = async (id: string) => {
+    const next = signalGenerators.filter((g) => g.id !== id);
+    setSignalGenerators(next);
+    try {
+      await saveSignalGenerators(next);
+    } catch {
+      pushLog("error", "Не удалось сохранить генераторы");
+    }
+  };
+
+  const handleToggleGenerator = async (id: string) => {
+    const next = signalGenerators.map((g) =>
+      g.id === id ? { ...g, enabled: !g.enabled } : g
+    );
+    setSignalGenerators(next);
+    try {
+      await saveSignalGenerators(next);
+    } catch {
+      pushLog("error", "Не удалось сохранить генераторы");
+    }
+  };
+
+  const handleSaveGenerator = async () => {
+    if (!editingGenerator) return;
+    const existingIndex = signalGenerators.findIndex((g) => g.id === editingGenerator.id);
+    let next: SignalGeneratorConfig[];
+    if (existingIndex === -1) {
+      next = [...signalGenerators, editingGenerator];
+    } else {
+      next = [...signalGenerators];
+      next[existingIndex] = editingGenerator;
+    }
+    setSignalGenerators(next);
+    setEditingGenerator(null);
+    try {
+      await saveSignalGenerators(next);
+    } catch {
+      pushLog("error", "Не удалось сохранить генераторы");
+    }
+  };
+
+  const handleCancelEditGenerator = () => {
+    setEditingGenerator(null);
   };
 
   if (authRequiredState === true && !authenticated) {
@@ -1609,6 +1783,7 @@ export const App: React.FC = () => {
 
                         if (groupSize === 1) {
                           if (selectedKind === "holding") {
+                            const highlightColor = getGeneratorHighlightForRange(addr, 1);
                             cells.push(
                               <td key={addr}>
                                 <input
@@ -1624,6 +1799,7 @@ export const App: React.FC = () => {
                                   onBlur={(e) =>
                                     void handleHoldingValueChange(globalIndex, e.target.value)
                                   }
+                                  style={highlightColor ? neonGlowStyle(highlightColor) : undefined}
                                 />
                               </td>
                             );
@@ -1640,6 +1816,7 @@ export const App: React.FC = () => {
 
                         // Широкие форматы: одно значение на 2 или 4 регистра
                         if (selectedKind === "holding") {
+                          const highlightColor = getGeneratorHighlightForRange(addr, groupSize);
                           cells.push(
                             <td
                               key={addr}
@@ -1659,6 +1836,7 @@ export const App: React.FC = () => {
                                 onBlur={(e) =>
                                   void handleHoldingValueChange(globalIndex, e.target.value)
                                 }
+                                style={highlightColor ? neonGlowStyle(highlightColor) : undefined}
                               />
                             </td>
                           );
@@ -1687,6 +1865,319 @@ export const App: React.FC = () => {
                 </table>
               </div>
             )}
+
+            {/* Панель генератора сигналов */}
+            <div className="panel-section signal-generator-panel">
+              <div className="panel-header">
+                <div>
+                  <div className="panel-title">Генератор сигналов</div>
+                  <div className="panel-subtitle">
+                    Автоматическое обновление holding‑регистров по заданному сигналу (INT16 / FLOAT32 / FLOAT64)
+                  </div>
+                </div>
+                <div className="panel-toolbar">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={handleCreateGenerator}
+                  >
+                    <span data-dot="" />
+                    Добавить генератор
+                  </button>
+                </div>
+              </div>
+
+              {editingGenerator && (
+                <div className="signal-generator-form">
+                  <div className="input-row">
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-name">
+                        Имя
+                      </label>
+                      <input
+                        id="gen-name"
+                        className="field-input"
+                        type="text"
+                        value={editingGenerator.name ?? ""}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            name: e.target.value
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-start">
+                        Start address
+                      </label>
+                      <input
+                        id="gen-start"
+                        className="field-input"
+                        type="number"
+                        value={editingGenerator.start_address}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            start_address: Number(e.target.value) || 0
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-type">
+                        Тип сигнала
+                      </label>
+                      <select
+                        id="gen-type"
+                        className="field-select"
+                        value={editingGenerator.wave_type}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            wave_type: e.target.value as SignalWaveType
+                          })
+                        }
+                      >
+                        <option value="sine">Синусоида</option>
+                        <option value="saw">Пилообразный</option>
+                        <option value="square">Меандр</option>
+                        <option value="constant">Константа</option>
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-data-type">
+                        Формат данных
+                      </label>
+                      <select
+                        id="gen-data-type"
+                        className="field-select"
+                        value={editingGenerator.data_type}
+                        onChange={(e) => {
+                          const dt = e.target.value as SignalDataType;
+                          const register_count =
+                            dt === "int16" ? 1 : dt === "float32" ? 2 : 4;
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            data_type: dt,
+                            register_count
+                          });
+                        }}
+                      >
+                        <option value="int16">INT16</option>
+                        <option value="float32">FLOAT32</option>
+                        <option value="float64">FLOAT64</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="input-row">
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-amplitude">
+                        Амплитуда
+                      </label>
+                      <input
+                        id="gen-amplitude"
+                        className="field-input"
+                        type="number"
+                        step="0.1"
+                        value={editingGenerator.amplitude}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            amplitude: Number(e.target.value) || 0
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-offset">
+                        Смещение
+                      </label>
+                      <input
+                        id="gen-offset"
+                        className="field-input"
+                        type="number"
+                        step="0.1"
+                        value={editingGenerator.offset}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            offset: Number(e.target.value) || 0
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-frequency">
+                        Частота, Гц
+                      </label>
+                      <input
+                        id="gen-frequency"
+                        className="field-input"
+                        type="number"
+                        step="0.1"
+                        min={0.01}
+                        value={editingGenerator.frequency_hz}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            frequency_hz: Number(e.target.value) || 0.01
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-period">
+                        Период обновления, мс
+                      </label>
+                      <input
+                        id="gen-period"
+                        className="field-input"
+                        type="number"
+                        min={10}
+                        step={10}
+                        value={editingGenerator.update_period_ms}
+                        onChange={(e) =>
+                          setEditingGenerator({
+                            ...editingGenerator,
+                            update_period_ms: Number(e.target.value) || 10
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="input-row">
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-neon-color">
+                        Цвет подсветки
+                      </label>
+                      <div className="input-row" style={{ alignItems: "center", gap: "0.5rem" }}>
+                        <input
+                          id="gen-neon-color"
+                          type="color"
+                          value={editingGenerator.neon_color ?? DEFAULT_NEON_COLOR}
+                          onChange={(e) =>
+                            setEditingGenerator({
+                              ...editingGenerator,
+                              neon_color: e.target.value
+                            })
+                          }
+                          style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border-subtle)", borderRadius: 4, cursor: "pointer" }}
+                        />
+                        <span className="panel-subtitle" style={{ fontSize: "0.7rem" }}>
+                          {editingGenerator.neon_color ?? DEFAULT_NEON_COLOR}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="gen-enabled">
+                        Включен
+                      </label>
+                      <div>
+                        <input
+                          id="gen-enabled"
+                          type="checkbox"
+                          checked={editingGenerator.enabled}
+                          onChange={(e) =>
+                            setEditingGenerator({
+                              ...editingGenerator,
+                              enabled: e.target.checked
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }} />
+                    <div className="btn-group">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={handleSaveGenerator}
+                      >
+                        <span data-dot="" />
+                        Сохранить генератор
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        data-variant="ghost"
+                        onClick={handleCancelEditGenerator}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {signalGenerators.length > 0 && (
+                <div className="signal-generator-list">
+                  <table className="registers-table">
+                    <thead>
+                      <tr className="registers-header-row">
+                        <th>Имя</th>
+                        <th>Тип</th>
+                        <th>Формат</th>
+                        <th>Адрес</th>
+                        <th>Значение</th>
+                        <th>Период, мс</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {signalGenerators.map((g) => (
+                        <tr key={g.id} className="registers-row">
+                          <td>{g.name || g.id}</td>
+                          <td>{g.wave_type}</td>
+                          <td>{g.data_type}</td>
+                          <td>{g.start_address}</td>
+                          <td>
+                            <input
+                              readOnly
+                              className="field-input registers-cell-input generator-value-display"
+                              value={formatGeneratorValue(g, generatorValues[g.id] ?? [])}
+                              aria-label={`Значение генератора ${g.name || g.id}`}
+                              style={g.enabled ? neonGlowStyle(g.neon_color) : undefined}
+                            />
+                          </td>
+                          <td>{g.update_period_ms}</td>
+                          <td>{g.enabled ? "Вкл" : "Выкл"}</td>
+                          <td>
+                            <div className="btn-group">
+                              <button
+                                type="button"
+                                className="btn-chip"
+                                onClick={() => handleEditGenerator(g.id)}
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-chip"
+                                onClick={() => void handleToggleGenerator(g.id)}
+                              >
+                                {g.enabled ? "Выключить" : "Включить"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-chip"
+                                data-variant="danger"
+                                onClick={() => void handleDeleteGenerator(g.id)}
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

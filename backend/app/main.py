@@ -12,11 +12,12 @@ from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from .api import config_api, profiles_api, state_api
+from .api import config_api, generators_api, profiles_api, state_api
 from .config import get_default_config
 from .modbus_core import ModbusSimulatorCore
 from .modbus_log import get_events as get_modbus_log_events
 from .modbus_server import start_modbus_tcp_server, stop_modbus_tcp_server
+from .signal_generators import SignalGeneratorEngine
 from .storage import Storage
 
 
@@ -34,11 +35,18 @@ core = ModbusSimulatorCore(
 )
 storage.load_state(core)
 
+signal_generators_engine = SignalGeneratorEngine(core)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Modbus-сервер запускается по кнопке "Запустить" в GUI, не при старте бэкенда
-    yield
-    # shutdown: optional stop of Modbus server could go here
+    # Запускаем фоновые генераторы сигналов
+    signal_generators_engine.start()
+    try:
+        # Modbus‑сервер запускается по кнопке "Запустить" в GUI, не при старте бэкенда
+        yield
+    finally:
+        # Останавливаем поток генераторов при завершении приложения
+        signal_generators_engine.stop()
 
 
 app = FastAPI(title="Modbus TCP Simulator Backend", lifespan=lifespan)
@@ -138,10 +146,12 @@ app.add_middleware(
 
 # Инициализируем API
 state_api.init_state_api(core, storage)
-profiles_api.init_profiles_api(storage, config, core)
+profiles_api.init_profiles_api(storage, config, core, signal_generators_engine)
+generators_api.init_generators_api(storage, signal_generators_engine)
 app.include_router(config_api.router, prefix="/api")
 app.include_router(state_api.router, prefix="/api")
 app.include_router(profiles_api.router, prefix="/api")
+app.include_router(generators_api.router, prefix="/api")
 
 
 @app.get("/health")

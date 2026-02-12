@@ -5,10 +5,11 @@
 - TypeScript + React 18 для frontend.
 
 **Backend:**
-- FastAPI – HTTP API и lifecycle-обработчики.
+- FastAPI – HTTP API и lifecycle-обработчики (lifespan с запуском SignalGeneratorEngine).
 - uvicorn – ASGI-сервер.
 - pymodbus – реализация Modbus TCP сервера.
-- pydantic v2 – валидация и схемы DTO.
+- pydantic v2 – валидация и схемы DTO (в т.ч. SignalGeneratorConfig с neon_color).
+- Модули: `signal_generators` (движок генераторов), `encoding_utils` (INT16/FLOAT32/FLOAT64 в регистры).
 - pytest, httpx, ruff – тесты и статический анализ.
 
 **Frontend:**
