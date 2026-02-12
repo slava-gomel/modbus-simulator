@@ -259,6 +259,10 @@ export const App: React.FC = () => {
   const [signalGenerators, setSignalGenerators] = useState<SignalGeneratorConfig[]>([]);
   const [editingGenerator, setEditingGenerator] = useState<SignalGeneratorConfig | null>(null);
   const [generatorValues, setGeneratorValues] = useState<Record<string, number[]>>({});
+  /** Кольцевой буфер последних значений по каждому генератору для живого графика. */
+  const [generatorChartSamples, setGeneratorChartSamples] = useState<Record<string, number[]>>({});
+  const GENERATOR_CHART_MAX_SAMPLES = 80;
+  const GENERATOR_CHART_POLL_MS = 120;
 
   const pushLog = (type: string, message: string) => {
     window.dispatchEvent(
@@ -385,26 +389,37 @@ export const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKind, start, count]);
 
-  // Подгрузка текущих значений по адресам генераторов для отображения в блоке генераторов
+  // Подгрузка значений генераторов: частое обновление для живого графика и отображения значения
   useEffect(() => {
     if (signalGenerators.length === 0) {
       setGeneratorValues({});
+      setGeneratorChartSamples({});
       return;
     }
     const fetchAll = async () => {
-      const next: Record<string, number[]> = {};
+      const nextValues: Record<string, number[]> = {};
       for (const g of signalGenerators) {
         try {
           const data = await fetchRegisters("holding", g.start_address, g.register_count);
-          next[g.id] = data.values;
+          nextValues[g.id] = data.values;
         } catch {
-          next[g.id] = [];
+          nextValues[g.id] = [];
         }
       }
-      setGeneratorValues((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+      setGeneratorValues((prev) => (JSON.stringify(prev) === JSON.stringify(nextValues) ? prev : nextValues));
+      setGeneratorChartSamples((prev) => {
+        const next: Record<string, number[]> = { ...prev };
+        for (const g of signalGenerators) {
+          const raw = nextValues[g.id] ?? [];
+          const num = getGeneratorNumericValue(g, raw);
+          const buf = [...(prev[g.id] ?? []), num].slice(-GENERATOR_CHART_MAX_SAMPLES);
+          next[g.id] = buf;
+        }
+        return next;
+      });
     };
     void fetchAll();
-    const interval = setInterval(fetchAll, REGISTERS_AUTO_REFRESH_MS);
+    const interval = setInterval(fetchAll, GENERATOR_CHART_POLL_MS);
     return () => clearInterval(interval);
   }, [signalGenerators]);
 
@@ -987,19 +1002,26 @@ export const App: React.FC = () => {
 
   /** Форматирование значения генератора по его data_type (порядок слов ABCD как в бэкенде). */
   const formatGeneratorValue = (g: SignalGeneratorConfig, rawValues: number[]): string => {
-    if (!rawValues.length) return "—";
+    const n = getGeneratorNumericValue(g, rawValues);
+    if (rawValues.length === 0) return "—";
+    if (g.data_type === "int16") return String(Math.round(n));
+    return Number.isFinite(n) ? String(n) : "—";
+  };
+
+  /** Числовое значение генератора из сырых регистров (для графика и расчётов). */
+  const getGeneratorNumericValue = (g: SignalGeneratorConfig, rawValues: number[]): number => {
+    if (!rawValues.length) return 0;
     const regs = rawValues.map((v) => v & 0xffff);
     if (g.data_type === "int16") {
       const v = regs[0];
-      return String(v > 0x7fff ? v - 0x10000 : v);
+      return v > 0x7fff ? v - 0x10000 : v;
     }
     if (g.data_type === "float32" && regs.length >= 2) {
       const word = (regs[0] << 16) | regs[1];
       const buf = new ArrayBuffer(4);
       const view = new DataView(buf);
       view.setUint32(0, word >>> 0);
-      const f = view.getFloat32(0);
-      return Number.isFinite(f) ? f.toString() : "NaN";
+      return view.getFloat32(0);
     }
     if (g.data_type === "float64" && regs.length >= 4) {
       const buf = new ArrayBuffer(8);
@@ -1008,10 +1030,9 @@ export const App: React.FC = () => {
       view.setUint16(2, regs[1]);
       view.setUint16(4, regs[2]);
       view.setUint16(6, regs[3]);
-      const f = view.getFloat64(0);
-      return Number.isFinite(f) ? f.toString() : "NaN";
+      return view.getFloat64(0);
     }
-    return "—";
+    return 0;
   };
 
   const DEFAULT_NEON_COLOR = "#00ff88";
@@ -1053,6 +1074,54 @@ export const App: React.FC = () => {
       }
     }
     return null;
+  };
+
+  /** Путь одного периода сигнала для мини-графика (запасной вариант при отсутствии выборок). */
+  const getSignalWavePathStatic = (waveType: SignalWaveType): string => {
+    const w = 120;
+    const h = 32;
+    const pad = 2;
+    const cy = h / 2;
+    const amp = (h - 2 * pad) / 2;
+    const pts: string[] = [];
+    const n = 48;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      let val: number;
+      if (waveType === "sine") {
+        val = Math.sin(2 * Math.PI * t);
+      } else if (waveType === "saw") {
+        val = 2 * t - 1;
+      } else if (waveType === "square") {
+        val = t < 0.5 ? 1 : -1;
+      } else {
+        val = 0;
+      }
+      const x = pad + t * (w - 2 * pad);
+      const y = cy - amp * val;
+      pts.push(`${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    return "M " + pts.join(" L ");
+  };
+
+  /** Путь графика по живым выборкам (нормализация по offset/amplitude генератора). */
+  const getSignalWavePathLive = (samples: number[], g: SignalGeneratorConfig): string => {
+    const w = 120;
+    const h = 32;
+    const pad = 2;
+    const cy = h / 2;
+    const amp = (h - 2 * pad) / 2;
+    if (samples.length < 2) return getSignalWavePathStatic(g.wave_type);
+    const a = g.amplitude !== 0 ? g.amplitude : 1;
+    const pts: string[] = [];
+    for (let i = 0; i < samples.length; i++) {
+      const normalized = (samples[i] - g.offset) / a;
+      const clamped = Math.max(-1, Math.min(1, normalized));
+      const x = pad + (i / (samples.length - 1)) * (w - 2 * pad);
+      const y = cy - amp * clamped;
+      pts.push(`${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    return "M " + pts.join(" L ");
   };
 
   const handleCreateGenerator = () => {
@@ -2121,6 +2190,7 @@ export const App: React.FC = () => {
                         <th>Тип</th>
                         <th>Формат</th>
                         <th>Адрес</th>
+                        <th>График</th>
                         <th>Значение</th>
                         <th>Период, мс</th>
                         <th>Статус</th>
@@ -2134,6 +2204,23 @@ export const App: React.FC = () => {
                           <td>{g.wave_type}</td>
                           <td>{g.data_type}</td>
                           <td>{g.start_address}</td>
+                          <td>
+                            <svg
+                              className="generator-wave-chart"
+                              viewBox="0 0 120 32"
+                              preserveAspectRatio="none"
+                              aria-hidden
+                            >
+                              <path
+                                d={getSignalWavePathLive(generatorChartSamples[g.id] ?? [], g)}
+                                fill="none"
+                                stroke={g.neon_color ?? DEFAULT_NEON_COLOR}
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </td>
                           <td>
                             <input
                               readOnly
