@@ -1543,14 +1543,6 @@ export const App: React.FC = () => {
               <div className="btn-group">
                 <button
                   type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={() => void refreshServerStatus()}
-                  disabled={serverLoading}
-                >
-                  Обновить статус
-                </button>
-                <button
-                  type="button"
                   className="btn btn-sm"
                   onClick={() => void handleServerStart()}
                   disabled={serverLoading || !!serverStatus?.running}
@@ -1861,13 +1853,6 @@ export const App: React.FC = () => {
                 />
               </div>
               <div className="btn-group">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={() => void reloadRegisters()}
-                >
-                  Обновить
-                </button>
                 {(selectedKind === "coils" || selectedKind === "holding") && (
                   <>
                     <button
