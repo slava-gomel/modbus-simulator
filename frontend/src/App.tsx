@@ -258,6 +258,8 @@ export const App: React.FC = () => {
 
   const [signalGenerators, setSignalGenerators] = useState<SignalGeneratorConfig[]>([]);
   const [editingGenerator, setEditingGenerator] = useState<SignalGeneratorConfig | null>(null);
+  /** Буфер ввода числовых полей формы генератора (проверка по blur, как у регистров). */
+  const [editGeneratorFields, setEditGeneratorFields] = useState<Record<string, string>>({});
   const [generatorValues, setGeneratorValues] = useState<Record<string, number[]>>({});
   /** Кольцевой буфер последних значений по каждому генератору для живого графика. */
   const [generatorChartSamples, setGeneratorChartSamples] = useState<Record<string, number[]>>({});
@@ -1035,7 +1037,7 @@ export const App: React.FC = () => {
     return 0;
   };
 
-  const DEFAULT_NEON_COLOR = "#00ff88";
+  const DEFAULT_NEON_COLOR = "#3b82f6";
 
   const emptyGenerator = (): SignalGeneratorConfig => ({
     id: `gen-${Date.now()}`,
@@ -1125,14 +1127,61 @@ export const App: React.FC = () => {
   };
 
   const handleCreateGenerator = () => {
+    setEditGeneratorFields({});
     setEditingGenerator(emptyGenerator());
   };
 
   const handleEditGenerator = (id: string) => {
     const found = signalGenerators.find((g) => g.id === id);
     if (found) {
+      setEditGeneratorFields({});
       setEditingGenerator({ ...found });
     }
+  };
+
+  /** Применить значение числового поля формы генератора по blur; при невалидном — подставить значение по умолчанию. */
+  const applyGeneratorNumericField = (
+    field: "start_address" | "amplitude" | "offset" | "frequency_hz" | "update_period_ms",
+    raw: string
+  ) => {
+    if (!editingGenerator) return;
+    const trimmed = raw.replace(",", ".").trim();
+    const defaults: Record<string, number> = {
+      start_address: 0,
+      amplitude: 1,
+      offset: 0,
+      frequency_hz: 1,
+      update_period_ms: 100,
+    };
+    setEditGeneratorFields((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "+") {
+      setEditingGenerator({ ...editingGenerator, [field]: defaults[field] });
+      return;
+    }
+    const num = field === "start_address" || field === "update_period_ms"
+      ? Math.floor(Number(trimmed))
+      : Number(trimmed);
+    if (!Number.isFinite(num)) {
+      setEditingGenerator({ ...editingGenerator, [field]: defaults[field] });
+      return;
+    }
+    if (field === "start_address" && num < 0) {
+      setEditingGenerator({ ...editingGenerator, [field]: 0 });
+      return;
+    }
+    if (field === "frequency_hz" && num <= 0) {
+      setEditingGenerator({ ...editingGenerator, [field]: 1 });
+      return;
+    }
+    if (field === "update_period_ms" && num < 10) {
+      setEditingGenerator({ ...editingGenerator, [field]: 10 });
+      return;
+    }
+    setEditingGenerator({ ...editingGenerator, [field]: num });
   };
 
   const handleDeleteGenerator = async (id: string) => {
@@ -1177,6 +1226,7 @@ export const App: React.FC = () => {
   };
 
   const handleCancelEditGenerator = () => {
+    setEditGeneratorFields({});
     setEditingGenerator(null);
   };
 
@@ -1983,13 +2033,17 @@ export const App: React.FC = () => {
                       <input
                         id="gen-start"
                         className="field-input"
-                        type="number"
-                        value={editingGenerator.start_address}
+                        type="text"
+                        inputMode="numeric"
+                        value={editGeneratorFields["start_address"] ?? editingGenerator.start_address}
                         onChange={(e) =>
-                          setEditingGenerator({
-                            ...editingGenerator,
-                            start_address: Number(e.target.value) || 0
-                          })
+                          setEditGeneratorFields((prev) => ({
+                            ...prev,
+                            start_address: e.target.value
+                          }))
+                        }
+                        onBlur={(e) =>
+                          applyGeneratorNumericField("start_address", e.target.value)
                         }
                       />
                     </div>
@@ -2048,14 +2102,17 @@ export const App: React.FC = () => {
                       <input
                         id="gen-amplitude"
                         className="field-input"
-                        type="number"
-                        step="0.1"
-                        value={editingGenerator.amplitude}
+                        type="text"
+                        inputMode="decimal"
+                        value={editGeneratorFields["amplitude"] ?? editingGenerator.amplitude}
                         onChange={(e) =>
-                          setEditingGenerator({
-                            ...editingGenerator,
-                            amplitude: Number(e.target.value) || 0
-                          })
+                          setEditGeneratorFields((prev) => ({
+                            ...prev,
+                            amplitude: e.target.value
+                          }))
+                        }
+                        onBlur={(e) =>
+                          applyGeneratorNumericField("amplitude", e.target.value)
                         }
                       />
                     </div>
@@ -2066,14 +2123,17 @@ export const App: React.FC = () => {
                       <input
                         id="gen-offset"
                         className="field-input"
-                        type="number"
-                        step="0.1"
-                        value={editingGenerator.offset}
+                        type="text"
+                        inputMode="decimal"
+                        value={editGeneratorFields["offset"] ?? editingGenerator.offset}
                         onChange={(e) =>
-                          setEditingGenerator({
-                            ...editingGenerator,
-                            offset: Number(e.target.value) || 0
-                          })
+                          setEditGeneratorFields((prev) => ({
+                            ...prev,
+                            offset: e.target.value
+                          }))
+                        }
+                        onBlur={(e) =>
+                          applyGeneratorNumericField("offset", e.target.value)
                         }
                       />
                     </div>
@@ -2084,15 +2144,17 @@ export const App: React.FC = () => {
                       <input
                         id="gen-frequency"
                         className="field-input"
-                        type="number"
-                        step="0.1"
-                        min={0.01}
-                        value={editingGenerator.frequency_hz}
+                        type="text"
+                        inputMode="decimal"
+                        value={editGeneratorFields["frequency_hz"] ?? editingGenerator.frequency_hz}
                         onChange={(e) =>
-                          setEditingGenerator({
-                            ...editingGenerator,
-                            frequency_hz: Number(e.target.value) || 0.01
-                          })
+                          setEditGeneratorFields((prev) => ({
+                            ...prev,
+                            frequency_hz: e.target.value
+                          }))
+                        }
+                        onBlur={(e) =>
+                          applyGeneratorNumericField("frequency_hz", e.target.value)
                         }
                       />
                     </div>
@@ -2103,15 +2165,17 @@ export const App: React.FC = () => {
                       <input
                         id="gen-period"
                         className="field-input"
-                        type="number"
-                        min={10}
-                        step={10}
-                        value={editingGenerator.update_period_ms}
+                        type="text"
+                        inputMode="numeric"
+                        value={editGeneratorFields["update_period_ms"] ?? editingGenerator.update_period_ms}
                         onChange={(e) =>
-                          setEditingGenerator({
-                            ...editingGenerator,
-                            update_period_ms: Number(e.target.value) || 10
-                          })
+                          setEditGeneratorFields((prev) => ({
+                            ...prev,
+                            update_period_ms: e.target.value
+                          }))
+                        }
+                        onBlur={(e) =>
+                          applyGeneratorNumericField("update_period_ms", e.target.value)
                         }
                       />
                     </div>
@@ -2122,10 +2186,11 @@ export const App: React.FC = () => {
                       <label className="field-label" htmlFor="gen-neon-color">
                         Цвет подсветки
                       </label>
-                      <div className="input-row" style={{ alignItems: "center", gap: "0.5rem" }}>
+                      <div className="input-row generator-color-row">
                         <input
                           id="gen-neon-color"
                           type="color"
+                          className="generator-color-input"
                           value={editingGenerator.neon_color ?? DEFAULT_NEON_COLOR}
                           onChange={(e) =>
                             setEditingGenerator({
@@ -2133,9 +2198,8 @@ export const App: React.FC = () => {
                               neon_color: e.target.value
                             })
                           }
-                          style={{ width: 36, height: 28, padding: 0, border: "1px solid var(--border-subtle)", borderRadius: 4, cursor: "pointer" }}
                         />
-                        <span className="panel-subtitle" style={{ fontSize: "0.7rem" }}>
+                        <span className="panel-subtitle generator-color-hex">
                           {editingGenerator.neon_color ?? DEFAULT_NEON_COLOR}
                         </span>
                       </div>

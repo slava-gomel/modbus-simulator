@@ -659,6 +659,51 @@ body {
   border: 1px solid rgba(55, 65, 81, 0.9);
 }
 
+.generator-color-row {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.generator-color-input {
+  width: 2.5rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-input);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.65);
+  transition: box-shadow var(--transition-fast);
+}
+
+.generator-color-input:hover {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.generator-color-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.7);
+}
+
+.generator-color-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.generator-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.generator-color-input::-moz-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+}
+
+.generator-color-hex {
+  font-size: 0.7rem;
+  color: var(--text-soft);
+}
+
 .registers-table {
   width: 100%;
   border-collapse: collapse;
