@@ -109,12 +109,40 @@ class InMemoryDataStore(ModbusSlaveContext):
         )
         if fx == 5:
             self.core.write_single_coil(address, values[0])
+            modbus_log_append(
+                "modbus_write",
+                f"WRITE COIL addr={address} value={values[0]}",
+                kind="coils",
+                start=address,
+                count=1,
+            )
         elif fx == 6:
             self.core.write_single_holding_register(address, values[0])
+            modbus_log_append(
+                "modbus_write",
+                f"WRITE HOLDING addr={address} count=1 values={values[0:1]}",
+                kind="holding",
+                start=address,
+                count=1,
+            )
         elif fx == 15:
             self.core.write_multiple_coils(address, values)
+            modbus_log_append(
+                "modbus_write",
+                f"WRITE COILS addr={address} count={len(values)} values={values[:8]}{'...' if len(values) > 8 else ''}",
+                kind="coils",
+                start=address,
+                count=len(values),
+            )
         elif fx == 16:
             self.core.write_multiple_holding_registers(address, values)
+            modbus_log_append(
+                "modbus_write",
+                f"WRITE HOLDING addr={address} count={len(values)} values={values[:8]}{'...' if len(values) > 8 else ''}",
+                kind="holding",
+                start=address,
+                count=len(values),
+            )
         else:
             logger.warning("Unsupported write function code: %s", fx)
             return

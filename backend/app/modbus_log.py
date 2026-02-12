@@ -6,11 +6,17 @@ from datetime import datetime, timezone
 from typing import TypedDict
 
 
-class ModbusLogEntry(TypedDict):
+class ModbusLogEntry(TypedDict, total=False):
+    """Структура одной записи Modbus-лога."""
+
     id: int
     type: str
     message: str
     time: str
+    # Дополнительные структурированные поля (опционально, могут отсутствовать)
+    kind: str  # "coils" | "holding" | ...
+    start: int
+    count: int
 
 
 _MAX_ENTRIES = 300
@@ -19,19 +25,25 @@ _entries: list[ModbusLogEntry] = []
 _next_id = 0
 
 
-def append(entry_type: str, message: str) -> None:
-    """Добавить запись в лог с временем в миллисекундах (UTC)."""
+def append(entry_type: str, message: str, **fields: object) -> None:
+    """Добавить запись в лог с временем в миллисекундах (UTC).
+
+    Дополнительные именованные аргументы пишутся в запись как есть
+    (например, kind, start, count для подсветки регистров).
+    """
     global _next_id
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     with _lock:
-        _entries.append(
-            {
-                "id": _next_id,
-                "type": entry_type,
-                "message": message,
-                "time": now,
-            }
-        )
+        entry: ModbusLogEntry = {
+            "id": _next_id,
+            "type": entry_type,
+            "message": message,
+            "time": now,
+        }
+        for key, value in fields.items():
+            if isinstance(key, str):
+                entry[key] = value  # type: ignore[assignment]
+        _entries.append(entry)
         _next_id += 1
         while len(_entries) > _MAX_ENTRIES:
             _entries.pop(0)

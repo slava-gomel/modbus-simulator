@@ -607,8 +607,15 @@ body {
   text-align: center;
   border-radius: 3px;
   cursor: pointer;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast),
-    transform 80ms ease-out, box-shadow 80ms ease-out;
+  transition:
+    background-color var(--transition-fast),
+    transform 80ms ease-out;
+}
+
+.bit-cell--modbus-changed {
+  box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e, 0 0 30px #22c55e;
+  border-color: #22c55e;
+  animation: modbusFlash 3s ease-out forwards;
 }
 
 .bit-cell--on {
@@ -802,6 +809,23 @@ body {
 
 .registers-cell-input {
   width: 100%;
+}
+
+@keyframes modbusFlash {
+  0% {
+    box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e, 0 0 30px #22c55e;
+    border-color: #22c55e;
+  }
+  100% {
+    box-shadow: none;
+    border-color: rgba(148, 163, 184, 0.65);
+  }
+}
+
+.registers-cell-input--modbus-changed {
+  box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e, 0 0 30px #22c55e;
+  border-color: #22c55e;
+  animation: modbusFlash 3s ease-out forwards;
 }
 
 .log-container {

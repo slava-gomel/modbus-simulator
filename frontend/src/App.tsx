@@ -333,6 +333,7 @@ export const App: React.FC = () => {
   const [registerFormatKind, setRegisterFormatKind] = useState<RegisterFormatKind>("int16");
   const [registerSign, setRegisterSign] = useState<RegisterSign>("unsigned");
   const [registerOrder, setRegisterOrder] = useState<RegisterOrder>("ABCD");
+  const [recentRegisterChanges, setRecentRegisterChanges] = useState<Record<string, number>>({});
 
   const [eventLog, setEventLog] = useState<AppLogEntry[]>([]);
   const [editHolding, setEditHolding] = useState<Record<number, string>>({});
@@ -448,7 +449,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const reloadRegisters = async (silent = false) => {
+  const reloadRegisters = async (silent = false, trackChanges = false) => {
     try {
       if (!silent) {
         setStateLoading(true);
@@ -475,7 +476,7 @@ export const App: React.FC = () => {
   const REGISTERS_AUTO_REFRESH_MS = 1500;
   useEffect(() => {
     const interval = setInterval(() => {
-      void reloadRegisters(true);
+      void reloadRegisters(true, true);
     }, REGISTERS_AUTO_REFRESH_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -526,14 +527,22 @@ export const App: React.FC = () => {
         const { events, next_id } = await fetchModbusLog(modbusLogSinceRef.current);
         modbusLogSinceRef.current = next_id;
         for (const e of events) {
+          // Лог в панель событий
           window.dispatchEvent(
             new CustomEvent("app:log", { detail: { type: e.type, message: e.message } })
           );
+          // Точное событие изменения от Modbus: структурированные поля kind/start/count
+          if (e.type === "modbus_write" && typeof e.start === "number" && typeof e.count === "number") {
+            const kind = e.kind === "coils" || e.kind === "holding" ? e.kind : null;
+            if (kind) {
+              markRegistersChanged(kind, e.start, e.count);
+            }
+          }
         }
       } catch {
         // игнорируем ошибки опроса лога
       }
-    }, 2000);
+    }, 250);
     return () => clearInterval(interval);
   }, [serverStatus?.running]);
 
@@ -1253,6 +1262,42 @@ export const App: React.FC = () => {
     }
     return null;
   };
+
+  const makeRegisterKey = (kind: "coils" | "holding", addr: number): string =>
+    `${kind}:${addr}`;
+
+  /** Отметить диапазон регистров как недавно изменённый с автоматическим снятием подсветки. */
+  const markRegistersChanged = (kind: "coils" | "holding", addrStart: number, count: number) => {
+    const durationMs = 3000;
+    const keys = Array.from({ length: count }, (_, i) => makeRegisterKey(kind, addrStart + i));
+
+    setRecentRegisterChanges((prev) => {
+      const next = { ...prev };
+      for (const key of keys) {
+        next[key] = (next[key] ?? 0) + 1;
+      }
+      return next;
+    });
+
+    window.setTimeout(() => {
+      setRecentRegisterChanges((prev) => {
+        const next = { ...prev };
+        for (const key of keys) {
+          const current = next[key];
+          if (current === undefined) continue;
+          if (current <= 1) {
+            delete next[key];
+          } else {
+            next[key] = current - 1;
+          }
+        }
+        return next;
+      });
+    }, durationMs);
+  };
+
+  const isRegisterRecentlyChanged = (kind: "coils" | "holding", addr: number): boolean =>
+    !!recentRegisterChanges[makeRegisterKey(kind, addr)];
 
   /** Путь одного периода сигнала для мини-графика (запасной вариант при отсутствии выборок). */
   const getSignalWavePathStatic = (waveType: SignalWaveType): string => {
@@ -2126,13 +2171,15 @@ export const App: React.FC = () => {
                             const addr = baseAddr + colIndex;
                             const on = value ? 1 : 0;
                             const interactive = selectedKind === "coils";
+                            const isChanged = isRegisterRecentlyChanged("coils", addr);
+                            const extraClass = isChanged ? " bit-cell--modbus-changed" : "";
                             return (
                               <button
                                 key={addr}
                                 type="button"
                                 className={`bit-cell ${on ? "bit-cell--on" : "bit-cell--off"} ${
                                   interactive ? "" : "bit-cell--readonly"
-                                }`}
+                                }${extraClass}`}
                                 onClick={
                                   interactive
                                     ? () => void handleCellChange(globalIndex, on ? 0 : 1)
@@ -2195,11 +2242,15 @@ export const App: React.FC = () => {
 
                         if (groupSize === 1) {
                           if (selectedKind === "holding") {
-                            const highlightColor = getGeneratorHighlightForRange(addr, 1);
+                            const generatorColor = getGeneratorHighlightForRange(addr, 1);
+                            const isChanged = isRegisterRecentlyChanged("holding", addr);
+                            const style = generatorColor ? neonGlowStyle(generatorColor) : undefined;
+                            const extraClass =
+                              isChanged && !generatorColor ? " registers-cell-input--modbus-changed" : "";
                             cells.push(
                               <td key={addr}>
                                 <input
-                                  className="field-input registers-cell-input"
+                                  className={`field-input registers-cell-input${extraClass}`}
                                   type="text"
                                   value={editHolding[globalIndex] ?? formatRegisterValue(globalIndex, value)}
                                   onChange={(e) =>
@@ -2211,7 +2262,7 @@ export const App: React.FC = () => {
                                   onBlur={(e) =>
                                     void handleHoldingValueChange(globalIndex, e.target.value)
                                   }
-                                  style={highlightColor ? neonGlowStyle(highlightColor) : undefined}
+                                  style={style}
                                 />
                               </td>
                             );
@@ -2228,7 +2279,11 @@ export const App: React.FC = () => {
 
                         // Широкие форматы: одно значение на 2 или 4 регистра
                         if (selectedKind === "holding") {
-                          const highlightColor = getGeneratorHighlightForRange(addr, groupSize);
+                          const generatorColor = getGeneratorHighlightForRange(addr, groupSize);
+                          const isChanged = isRegisterRecentlyChanged("holding", addr);
+                          const style = generatorColor ? neonGlowStyle(generatorColor) : undefined;
+                          const extraClass =
+                            isChanged && !generatorColor ? " registers-cell-input--modbus-changed" : "";
                           cells.push(
                             <td
                               key={addr}
@@ -2236,7 +2291,7 @@ export const App: React.FC = () => {
                               className="registers-cell-wide"
                             >
                               <input
-                                className="field-input registers-cell-input"
+                                className={`field-input registers-cell-input${extraClass}`}
                                 type="text"
                                 value={editHolding[globalIndex] ?? formatRegisterValue(globalIndex, value)}
                                 onChange={(e) =>
@@ -2248,7 +2303,7 @@ export const App: React.FC = () => {
                                 onBlur={(e) =>
                                   void handleHoldingValueChange(globalIndex, e.target.value)
                                 }
-                                style={highlightColor ? neonGlowStyle(highlightColor) : undefined}
+                                style={style}
                               />
                             </td>
                           );
