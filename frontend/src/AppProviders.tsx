@@ -15,17 +15,17 @@ export const AppProviders: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <LogsProvider>
       <AuthProviderWrapper>
-        <ServerProviderWrapper>
-          <ConfigProvider>
-            <GeneratorsProvider>
-              <ProfilesProviderWrapper>
-                <RegistersProviderWrapper>
+        <ConfigProvider>
+          <GeneratorsProvider>
+            <RegistersProvider>
+              <ServerProviderWrapper>
+                <ProfilesProviderWrapper>
                   {children}
-                </RegistersProviderWrapper>
-              </ProfilesProviderWrapper>
-            </GeneratorsProvider>
-          </ConfigProvider>
-        </ServerProviderWrapper>
+                </ProfilesProviderWrapper>
+              </ServerProviderWrapper>
+            </RegistersProvider>
+          </GeneratorsProvider>
+        </ConfigProvider>
       </AuthProviderWrapper>
     </LogsProvider>
   );
@@ -48,11 +48,14 @@ const AuthProviderWrapper: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 const ServerProviderWrapper: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Получаем функцию markRegistersChanged из RegistersContext
-  // Но RegistersProvider ещё не создан на этом уровне, поэтому передадим callback через prop
-  // В текущей реализации ServerProvider принимает onModbusWrite callback
+  const { markRegistersChanged } = useRegisters();
+  
+  const handleModbusWrite = useCallback((kind: "coils" | "holding", start: number, count: number) => {
+    markRegistersChanged(kind, start, count);
+  }, [markRegistersChanged]);
   
   return (
-    <ServerProvider onModbusWrite={undefined}>
+    <ServerProvider onModbusWrite={handleModbusWrite}>
       {children}
     </ServerProvider>
   );
@@ -69,13 +72,5 @@ const ProfilesProviderWrapper: React.FC<{ children: ReactNode }> = ({ children }
     <ProfilesProvider onProfileLoad={handleProfileLoad}>
       {children}
     </ProfilesProvider>
-  );
-};
-
-const RegistersProviderWrapper: React.FC<{ children: ReactNode }> = ({ children }) => {
-  return (
-    <RegistersProvider>
-      {children}
-    </RegistersProvider>
   );
 };
