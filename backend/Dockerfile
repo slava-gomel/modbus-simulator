@@ -14,6 +14,7 @@ RUN pip install --upgrade pip && \
     pip install .[dev]
 
 COPY app ./app
+COPY tests ./tests
 
 EXPOSE 8000 1502
 

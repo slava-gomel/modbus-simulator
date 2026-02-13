@@ -18,12 +18,23 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: production
     container_name: modbud_frontend
     ports:
       - "8080:80"
     depends_on:
       - backend
     restart: unless-stopped
+
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: modbud_frontend_test
+    profiles:
+      - testing
+    command: npm test -- --run
 
 volumes:
   sim_data:

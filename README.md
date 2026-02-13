@@ -80,6 +80,7 @@ Frontend: `http://localhost:5173`, API прокси `/api` → `http://localhost
 - **[docs/API.md](./docs/API.md)** — Полная REST API документация
 - **[TESTING.md](./TESTING.md)** — Руководство по тестированию (backend + frontend)
 - **[DOCKER_REBUILD.md](./DOCKER_REBUILD.md)** — Инструкции по пересборке Docker после изменений
+- **[DOCKER_TEST_RESULTS.md](./DOCKER_TEST_RESULTS.md)** — Результаты тестирования в Docker окружении
 
 ### Структура проекта
 
@@ -173,19 +174,20 @@ npm run test:ui  # UI интерфейс
 npm run test:coverage  # С покрытием кода
 ```
 
-**Покрытие:** 70+ тестов (converters, usePolling, useCollapse)
+**Покрытие:** 54 теста (converters, usePolling, useCollapse)
 
 ### Docker
 
 ```bash
-# Backend тесты
-docker compose run --rm backend pytest tests/ -v
+# Backend тесты (важно: использовать python -m pytest)
+docker compose run --rm backend python -m pytest tests/ -v
 
-# Frontend тесты
-docker compose run --rm frontend npm test
+# Frontend тесты (используется профиль testing)
+docker compose --profile testing run --rm frontend-test
 ```
 
-См. [TESTING.md](./TESTING.md) для подробностей.
+**Статистика Docker тестов:** 146/148 прошли (98.6%)  
+См. [TESTING.md](./TESTING.md) и [DOCKER_TEST_RESULTS.md](./DOCKER_TEST_RESULTS.md) для подробностей.
 
 ## Авторизация (опционально)
 

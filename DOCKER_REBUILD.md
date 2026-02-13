@@ -49,18 +49,33 @@ docker compose ps
 ### Backend тесты
 
 ```bash
-docker compose run --rm backend pytest tests/ -v
+# Важно: использовать python -m pytest вместо pytest напрямую
+docker compose run --rm backend python -m pytest tests/ -v
+
+# С покрытием
+docker compose run --rm backend python -m pytest tests/ --cov=app --cov-report=term
+
+# Конкретный модуль
+docker compose run --rm backend python -m pytest tests/test_modbus_core.py -v
 ```
 
 ### Frontend тесты
 
 ```bash
-# Первая установка зависимостей (внутри контейнера)
-docker compose run --rm frontend npm install
+# Использовать специальный сервис frontend-test
+docker compose --profile testing run --rm frontend-test
 
-# Запуск тестов
-docker compose run --rm frontend npm test
+# Или напрямую с npm
+docker compose --profile testing run --rm frontend-test npm test -- --run
+
+# С покрытием
+docker compose --profile testing run --rm frontend-test npm test -- --run --coverage
+
+# С UI (доступен на http://localhost:51204)
+docker compose --profile testing run --rm -p 51204:51204 frontend-test npm test -- --ui
 ```
+
+**Примечание:** Frontend использует profile `testing` для изоляции тестового окружения от production.
 
 ## Альтернатива: Локальная разработка
 
@@ -84,6 +99,45 @@ npm test
 
 ## Что изменилось
 
+### Backend `Dockerfile`
+
+```diff
++ COPY tests ./tests
+```
+- Тесты теперь копируются в образ для запуска в Docker
+
+### Frontend `Dockerfile`
+
+Переработан на multi-stage build:
+```dockerfile
+FROM node:20-alpine AS base     # Базовый слой с зависимостями
+FROM base AS dev                # Для тестирования
+FROM base AS build              # Для сборки
+FROM nginx:1.27-alpine AS production  # Production образ
+```
+
+**Преимущества:**
+- Тестовые зависимости НЕ попадают в production образ
+- Production образ остался компактным (~40 MB)
+- Dev образ содержит всё для тестирования
+
+### `docker-compose.yml`
+
+```diff
+  frontend:
+    build:
++     target: production
++
++ frontend-test:
++   build:
++     target: dev
++   profiles:
++     - testing
++   command: npm test -- --run
+```
+- Добавлен отдельный сервис `frontend-test` для тестов
+- Использование Docker Compose profiles для изоляции
+
 ### Frontend `package.json`
 
 Добавлены dev-зависимости:
@@ -95,27 +149,39 @@ npm test
 
 ### Новые файлы
 
-**Backend:**
-- `backend/tests/test_encoding_utils.py` – тесты конвертации (22 теста)
+**Backend тесты (94 теста):**
+- `test_encoding_utils.py` – конвертация данных (22 теста)
+- `test_modbus_core.py` – ядро Modbus (41 тест)
+- `test_modbus_integration.py` – интеграция с pymodbus (18 тестов)
+- `test_*_api.py` – API endpoints (13 тестов)
 
-**Frontend:**
-- `frontend/vitest.config.ts` – конфигурация Vitest
-- `frontend/src/test/setup.ts` – настройка окружения
-- `frontend/src/features/registers/converters.test.ts` – тесты converters (60+ тестов)
-- `frontend/src/shared/hooks/usePolling.test.ts` – тесты usePolling (6 тестов)
-- `frontend/src/shared/hooks/useCollapse.test.ts` – тесты useCollapse (6 тестов)
-- `frontend/README_TESTS.md` – документация по тестам
+**Frontend тесты (54 теста):**
+- `vitest.config.ts` – конфигурация Vitest
+- `src/test/setup.ts` – настройка окружения
+- `converters.test.ts` – тесты converters (44 теста)
+- `usePolling.test.ts` – тесты usePolling (5 тестов)
+- `useCollapse.test.ts` – тесты useCollapse (5 тестов)
 
 **Документация:**
 - `.cursorrules` – проектный интеллект и паттерны
 - `TESTING.md` – руководство по тестированию
 - `DOCKER_REBUILD.md` – инструкции по пересборке
+- `DOCKER_TEST_RESULTS.md` – результаты Docker тестов
+- `frontend/README_TESTS.md` – frontend тестирование
+- `backend/tests/README_MODBUS_TESTS.md` – Modbus тесты
 
 ## Размер образов
 
-После пересборки размер frontend образа увеличится на ~50-100 MB из-за тестовых зависимостей.
+### До изменений
+- Backend: ~300 MB
+- Frontend (production): ~40 MB
 
-Если это критично для production, можно создать отдельный `Dockerfile.test` для тестирования.
+### После изменений
+- Backend: ~302 MB (+2 MB из-за копирования tests/)
+- Frontend (production): ~40 MB (без изменений!)
+- Frontend (dev): ~450 MB (только для тестирования)
+
+**Важно:** Production образы frontend остались компактными благодаря multi-stage build.
 
 ## Troubleshooting
 
