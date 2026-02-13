@@ -10,7 +10,13 @@
   - `ModbusSimulatorCore` – чистое доменное ядро без привязки к сетевому слою.
   - `modbus_server` – адаптер между `pymodbus` и ядром.
   - `api/*` – HTTP API поверх ядра (REST).
-  - `storage` – изолированный слой работы с файловым хранилищем (config/state).
+  - **`storage/` – модульная система хранения:**
+    - `base.py` – BaseStorage с общими методами
+    - `config.py` – ConfigStorage для config.yaml
+    - `state.py` – StateStorage для state.json с методом `_apply_state`
+    - `profiles.py` – ProfilesStorage для профилей с генераторами
+    - `__init__.py` – Storage фасад (композиция ConfigStorage + StateStorage + ProfilesStorage)
+    - **Single Responsibility Principle**: каждый класс отвечает за свою область данных
 - Идиоматичный REST:
   - `/api/config` – конфигурация.
   - `/api/state/{kind}` – работа с регистрами.
@@ -19,18 +25,63 @@
 - `/api/server/modbus_log` – отдаёт кольцевой буфер событий Modbus (`ModbusLogEntry`) с поддержкой поля `since` и типом `modbus_write` для записей FC05/06/15/16, содержащих `kind` (`coils`/`holding`), `start`, `count`.
 - Фоновый движок генераторов: `SignalGeneratorEngine` в отдельном потоке обновляет holding‑регистры по таймеру; конфигурация задаётся через API и восстанавливается из профиля при load. Движок хранит полный список генераторов и в run‑loop учитывает только включённые (`enabled`), чтобы профили и `/api/generators` всегда работали с полной конфигурацией.
 
-**Паттерны Frontend (после рефакторинга):**
+**Паттерны Frontend (после комплексного рефакторинга v2):**
 - **Feature-based модульная архитектура:**
   - Каждая feature изолирована в своей папке: Context (state + logic) + UI компоненты
   - `features/auth/`, `features/config/`, `features/server/`, `features/profiles/`, `features/logs/`, `features/registers/`, `features/generators/`
+  
+- **Модульная API структура** (`api/`):
+  - `client.ts` – axios instance с auth interceptor (обработка 401)
+  - `types.ts` – все API типы данных (Response/Request DTO)
+  - Доменные модули:
+    - `registers.ts` – fetchRegisters, writeSingle, writeBatch
+    - `generators.ts` – fetchSignalGenerators, saveSignalGenerators
+    - `profiles.ts` – listProfiles, saveProfile, loadProfile, deleteProfile, updateProfile
+    - `server.ts` – fetchConfig, updateConfig, fetchServerStatus, startServer, stopServer, fetchModbusLog, authRequired
+  - `index.ts` – barrel exports для удобного импорта
+  - **Преимущества:** чёткое разделение по доменам, легко тестировать, удобно расширять
+  
+- **Shared UI компоненты** (`shared/components/`):
+  - `Button.tsx` – универсальная кнопка (variant: default/ghost/outline/danger, size: sm/md)
+  - `Input.tsx` – поле ввода с label, error, readOnly поддержкой
+  - `RadioGroup.tsx` – группа радиокнопок с массивом options
+  - `NumericField.tsx` – числовое поле с валидацией на blur (min/max/defaultValue)
+  - `index.ts` – barrel export
+  - **Используются везде для консистентности UI**
+  
 - **React Context API для state management:**
   - Каждая feature имеет свой Context Provider
   - AppProviders.tsx композирует все контексты с управлением зависимостями
   - Inter-context communication через prop-based callbacks
+  - **Порядок providers важен:** RegistersProvider должен быть выше ServerProviderWrapper для передачи `markRegistersChanged`
+  
 - **Shared модули:**
-  - `shared/types.ts` – общие типы приложения
+  - **`shared/types/`** – модульная структура типов:
+    - `registers.ts` – RegisterKind, RegisterFormatKind, RegisterSign, RegisterOrder
+    - `logs.ts` – AppLogEntry, LogFilterKey
+    - `generators.ts` – re-export из API types
+    - `index.ts` – barrel exports
   - `shared/constants.ts` – константы (polling intervals, colors, limits)
-  - `shared/hooks/` – переиспользуемые хуки (usePolling, useCollapse)
+  - **`shared/hooks/`** – переиспользуемые хуки:
+    - `usePolling` – периодический вызов callback с интервалом
+    - `useCollapse` – состояние сворачивания панелей
+    - `useApiCall` – универсальный хук для API с loading/error/data состоянием
+  
+- **Converters и бизнес-логика** (`features/registers/converters.ts`):
+  - Вся логика конвертации форматов вынесена из Context
+  - Функции: `convertToInt16`, `convertToInt32`, `convertToInt64`, `convertToFloat32`, `convertToFloat64`, `convertToBitmap`
+  - Валидация: `isEmptyInput`, `normalizeNumericString`
+  - Результат: `ConversionResult { registers: number[], error?: string }`
+  - **RegistersContext упрощён с 440 до ~280 строк**
+  
+- **Разделённые панели:**
+  - **RegistersPanel** (с 345 до ~120 строк):
+    - `RegistersToolbar.tsx` – тип, start, count, кнопки управления
+    - `RegistersFormatSelector.tsx` – выбор формата/знака/порядка с RadioGroup
+  - **LogView** (с 266 до ~100 строк):
+    - `LogFilters.tsx` – фильтры, search, IP, кнопки Export/Clear
+    - `LogEntry.tsx` – одна запись лога (время + сообщение)
+  - **Преимущества:** читаемость, тестируемость, переиспользование
 - **Компонентная композиция:**
   - Крупные панели разбиты на под-компоненты (RegistersTable, CoilsTable, RegisterCell)
   - Каждый компонент обёрнут в React.memo для оптимизации
