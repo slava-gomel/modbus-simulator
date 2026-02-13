@@ -1,4 +1,5 @@
 import React, { ReactNode, useCallback } from "react";
+import { WebSocketProvider } from "./features/websocket";
 import { LogsProvider } from "./features/logs";
 import { AuthProvider } from "./features/auth";
 import { ServerProvider } from "./features/server";
@@ -15,17 +16,19 @@ export const AppProviders: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <LogsProvider>
       <AuthProviderWrapper>
-        <ConfigProvider>
-          <GeneratorsProvider>
-            <RegistersProvider>
-              <ServerProviderWrapper>
-                <ProfilesProviderWrapper>
-                  {children}
-                </ProfilesProviderWrapper>
-              </ServerProviderWrapper>
-            </RegistersProvider>
-          </GeneratorsProvider>
-        </ConfigProvider>
+        <WebSocketProvider>
+          <ConfigProvider>
+            <GeneratorsProvider>
+              <RegistersProvider>
+                <ServerProviderWrapper>
+                  <ProfilesProviderWrapper>
+                    {children}
+                  </ProfilesProviderWrapper>
+                </ServerProviderWrapper>
+              </RegistersProvider>
+            </GeneratorsProvider>
+          </ConfigProvider>
+        </WebSocketProvider>
       </AuthProviderWrapper>
     </LogsProvider>
   );

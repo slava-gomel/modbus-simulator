@@ -6,6 +6,8 @@
 - ✅ Backend: модульная storage система с разделением ответственности.
 - ✅ Документация: ARCHITECTURE.md, CONTRIBUTING.md, docs/API.md.
 - ✅ **Тесты: полное покрытие всех Modbus функций (164+ теста).**
+- ✅ **WebSocket:** real-time обновления (registers, server, generators); polling удалён.
+- ✅ **Исправлена лавина запросов:** в App.tsx начальная загрузка (loadConfig, refreshProfiles, loadGenerators) выполняется один раз при `authenticated === true`; колбэки не в deps эффекта, иначе при setCurrentProfileSlug в refreshProfiles эффект уходил в бесконечный цикл (1450+ запросов, Stalled, таблица регистров не загружалась).
 
 **Реализовано:**
 - Backend:
@@ -36,7 +38,7 @@
     - Старый монолитный `types.ts` разделён на доменные модули
   
   - **Custom hooks** (`shared/hooks/`):
-    - `usePolling` – периодический опрос API
+    - `useWebSocket` – подписка на каналы WebSocket (registers, server, generators)
     - `useCollapse` – состояние сворачивания панелей
     - `useApiCall` – универсальный хук для API вызовов с loading/error
   
@@ -142,5 +144,5 @@
 - TypeScript компиляция: ✅ успешна
 - Python синтаксис: ✅ корректен
 
-**Дальше по желанию:** CI (GitHub Actions), E2E тесты (Playwright), WebSocket для real-time, E2E Modbus с реальным TCP клиентом.
+**Дальше по желанию:** CI (GitHub Actions), E2E тесты (Playwright), E2E Modbus с реальным TCP клиентом.
 

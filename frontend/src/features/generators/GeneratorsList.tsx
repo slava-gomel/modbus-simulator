@@ -6,7 +6,8 @@ import { neonGlowStyle, formatGeneratorValue } from "./utils";
 
 interface GeneratorsListProps {
   generators: SignalGeneratorConfig[];
-  generatorValues: Record<string, number[]>;
+  // Текущее числовое значение генератора (последнее известное)
+  generatorValues: Record<string, number>;
   generatorChartSamples: Record<string, number[]>;
 }
 
@@ -65,7 +66,7 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
                 <input
                   readOnly
                   className="field-input registers-cell-input generator-value-display"
-                  value={formatGeneratorValue(g, generatorValues[g.id] ?? [])}
+                  value={formatGeneratorValue(g, generatorValues[g.id])}
                   aria-label={`Значение генератора ${g.name || g.id}`}
                   style={g.enabled ? neonGlowStyle(g.neon_color) : undefined}
                 />

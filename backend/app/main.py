@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import logging
 import os
@@ -12,13 +13,15 @@ from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-from .api import config_api, generators_api, profiles_api, state_api
+from .api import config_api, generators_api, profiles_api, state_api, websocket_api
 from .config import get_default_config
 from .modbus_core import ModbusSimulatorCore
 from .modbus_log import get_events as get_modbus_log_events
+from .modbus_log import set_websocket_manager as set_modbus_log_ws_manager
 from .modbus_server import start_modbus_tcp_server, stop_modbus_tcp_server
 from .signal_generators import SignalGeneratorEngine
 from .storage import Storage
+from .websocket_manager import ConnectionManager
 
 
 logger = logging.getLogger(__name__)
@@ -35,11 +38,17 @@ core = ModbusSimulatorCore(
 )
 storage.state.load_state(core)
 
-signal_generators_engine = SignalGeneratorEngine(core)
+# Инициализация WebSocket manager
+ws_manager = ConnectionManager()
+
+# Интеграция WebSocket в модули
+signal_generators_engine = SignalGeneratorEngine(core, ws_manager)
+set_modbus_log_ws_manager(ws_manager)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Запускаем фоновые генераторы сигналов
+    # Передаём основной event loop в движок, чтобы broadcast из фонового потока работал
+    signal_generators_engine.set_event_loop(asyncio.get_running_loop())
     signal_generators_engine.start()
     try:
         # Modbus‑сервер запускается по кнопке "Запустить" в GUI, не при старте бэкенда
@@ -145,15 +154,17 @@ app.add_middleware(
 )
 
 # Инициализируем API и гарантируем наличие профиля по умолчанию
-state_api.init_state_api(core, storage)
+state_api.init_state_api(core, storage, ws_manager)
 # Создаём профиль 'default', если он ещё не существует.
 storage.profiles.ensure_default_profile(core)
 profiles_api.init_profiles_api(storage, config, core, signal_generators_engine)
 generators_api.init_generators_api(storage, signal_generators_engine)
+websocket_api.init_websocket_api(ws_manager)
 app.include_router(config_api.router, prefix="/api")
 app.include_router(state_api.router, prefix="/api")
 app.include_router(profiles_api.router, prefix="/api")
 app.include_router(generators_api.router, prefix="/api")
+app.include_router(websocket_api.router)
 
 
 @app.get("/health")
@@ -171,15 +182,11 @@ def server_status() -> ServerStatus:
     return _get_server_status()
 
 
-@app.get("/api/server/modbus_log")
-def server_modbus_log(since: int = 0) -> dict:
-    """События Modbus (запросы/ответы) для журнала GUI. Параметр since — последний известный id."""
-    events, next_id = get_modbus_log_events(since)
-    return {"events": events, "next_id": next_id}
+# Удалён endpoint /api/server/modbus_log - заменён на WebSocket /ws/server
 
 
 @app.post("/api/server/start", response_model=ServerStatus)
-def server_start() -> ServerStatus:
+async def server_start() -> ServerStatus:
     logger.info("Modbus: POST /api/server/start — текущий поток: %s, is_alive=%s",
                 _server_thread, _server_thread.is_alive() if _server_thread else None)
     if _server_thread is not None and not _server_thread.is_alive():
@@ -188,11 +195,18 @@ def server_start() -> ServerStatus:
     _start_server_thread()
     status = _get_server_status()
     logger.info("Modbus: статус после start: running=%s, error=%s", status.running, status.error)
+    
+    # WebSocket broadcast изменения статуса
+    await ws_manager.broadcast("server", {
+        "event": "server_status",
+        "data": status.model_dump()
+    })
+    
     return status
 
 
 @app.post("/api/server/stop", response_model=ServerStatus)
-def server_stop() -> ServerStatus:
+async def server_stop() -> ServerStatus:
     global _server_thread  # noqa: PLW0603
     logger.info("Modbus: POST /api/server/stop — поток: %s, is_alive=%s",
                 _server_thread, _server_thread.is_alive() if _server_thread else None)
@@ -206,5 +220,12 @@ def server_stop() -> ServerStatus:
             logger.warning("Modbus: поток не завершился за 5 с")
     status = _get_server_status()
     logger.info("Modbus: статус после stop: running=%s", status.running)
+    
+    # WebSocket broadcast изменения статуса
+    await ws_manager.broadcast("server", {
+        "event": "server_status",
+        "data": status.model_dump()
+    })
+    
     return status
 

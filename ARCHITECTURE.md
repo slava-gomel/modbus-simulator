@@ -58,7 +58,21 @@ Storage/
 - Фоновая генерация через threading
 - Запись напрямую в holding регистры
 
-#### 4. FastAPI роуты
+#### 4. WebSocket Communication
+Real-time обновления через WebSocket (заменил HTTP polling):
+- **ConnectionManager** - управление WebSocket соединениями
+- **Раздельные каналы:** registers, server, generators
+- **Auto-reconnection** с exponential backoff
+- **Broadcast** событий из threading кода через `asyncio.run_coroutine_threadsafe()`
+
+**WebSocket Endpoints:**
+- `/ws/registers` - изменения регистров
+- `/ws/server` - статус сервера, Modbus лог
+- `/ws/generators` - значения генераторов (~120ms)
+
+См. [docs/WEBSOCKET.md](docs/WEBSOCKET.md) для детальной информации.
+
+#### 5. REST API роуты
 
 | Группа | Путь | Назначение |
 |--------|------|-----------|
@@ -67,6 +81,7 @@ Storage/
 | Generators | `/api/generators` | CRUD генераторов сигналов |
 | Profiles | `/api/profiles` | Управление профилями |
 | Server | `/api/server/*` | Контроль Modbus сервера |
+| WebSocket | `/ws/{channel}` | Real-time обновления |
 
 ### Зависимости модулей
 
@@ -75,13 +90,18 @@ graph TD
     API[FastAPI Routes] --> Core[ModbusSimulatorCore]
     API --> Storage[Storage]
     API --> Generators[SignalGeneratorEngine]
+    API --> WSManager[WebSocket Manager]
     
     Storage --> ConfigStorage
     Storage --> StateStorage
     Storage --> ProfilesStorage
     
     Generators --> Core
+    Generators --> WSManager
     Server[Modbus Server] --> Core
+    ModbusLog[Modbus Log] --> WSManager
+    
+    WSManager --> WSEndpoints[WebSocket Endpoints]
 ```
 
 ## Frontend архитектура
@@ -96,7 +116,8 @@ features/
 ├── logs/          # Журнал событий
 ├── profiles/      # Профили
 ├── registers/     # Регистры и форматы
-└── server/        # Управление сервером
+├── server/        # Управление сервером
+└── websocket/     # WebSocket Context и hooks
 ```
 
 ### React Context API

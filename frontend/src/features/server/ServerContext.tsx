@@ -1,8 +1,7 @@
 import React, { createContext, useState, useEffect, useRef, ReactNode, useCallback } from "react";
-import { ServerStatus, fetchServerStatus, startServer, stopServer, fetchModbusLog } from "../../api";
+import { ServerStatus, fetchServerStatus, startServer, stopServer } from "../../api";
 import { useLogsContext } from "../logs";
-import { usePolling } from "../../shared/hooks";
-import { SERVER_STATUS_POLL_MS, MODBUS_LOG_POLL_MS } from "../../shared/constants";
+import { useWebSocket } from "../../shared/hooks";
 
 interface ServerContextValue {
   serverStatus: ServerStatus | null;
@@ -77,37 +76,35 @@ export const ServerProvider: React.FC<{
     }
   }, [pushLog]);
 
-  // Автообновление статуса Modbus-сервера
-  usePolling(
-    async () => {
-      if (serverLoading) return;
-      try {
-        const status = await fetchServerStatus();
+  // WebSocket подписка на события сервера и Modbus лога
+  useWebSocket(
+    "server",
+    (event, data) => {
+      if (event === "server_status") {
+        // Обновление статуса сервера
+        const status = data as ServerStatus;
         const wasRunning = prevServerRunningRef.current;
         prevServerRunningRef.current = status.running;
         setServerStatus(status);
+        
         if (wasRunning === true && !status.running) {
           const msg = status.error
             ? `Сервер Modbus остановился: ${status.error}`
             : "Сервер Modbus остановился (поток завершился)";
           pushLog("server_stop", msg);
         }
-      } catch {
-        prevServerRunningRef.current = false;
-        setServerStatus(null);
-      }
-    },
-    SERVER_STATUS_POLL_MS,
-    [serverLoading, pushLog]
-  );
-
-  // Опрос лога Modbus (запросы/ответы), когда сервер запущен
-  usePolling(
-    async () => {
-      if (!serverStatus?.running) return;
-      try {
-        const { events, next_id } = await fetchModbusLog(modbusLogSinceRef.current);
-        modbusLogSinceRef.current = next_id;
+      } else if (event === "modbus_log") {
+        // Новые записи в логе Modbus
+        const events = data as Array<{
+          id: number;
+          type: string;
+          message: string;
+          time: string;
+          kind?: string;
+          start?: number;
+          count?: number;
+        }>;
+        
         for (const e of events) {
           // Лог в панель событий
           window.dispatchEvent(
@@ -121,12 +118,9 @@ export const ServerProvider: React.FC<{
             }
           }
         }
-      } catch {
-        // игнорируем ошибки опроса лога
       }
     },
-    serverStatus?.running ? MODBUS_LOG_POLL_MS : null,
-    [serverStatus?.running, onModbusWrite]
+    [pushLog, onModbusWrite]
   );
 
   return (

@@ -1,19 +1,24 @@
 """Tests for profiles API."""
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
-client = TestClient(app)
+
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
-def test_list_profiles_empty_or_list() -> None:
+def test_list_profiles_empty_or_list(client: TestClient) -> None:
     resp = client.get("/api/profiles")
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
 
 
-def test_save_profile() -> None:
+def test_save_profile(client: TestClient) -> None:
     resp = client.post("/api/profiles", json={"name": "test_profile", "comment": "for tests"})
     assert resp.status_code == 200
     data = resp.json()
@@ -21,7 +26,7 @@ def test_save_profile() -> None:
     assert data.get("name") == "test_profile"
 
 
-def test_load_profile() -> None:
+def test_load_profile(client: TestClient) -> None:
     # ensure one exists
     client.post("/api/profiles", json={"name": "load_test", "comment": ""})
     resp = client.post("/api/profiles/load_test/load")
@@ -29,7 +34,7 @@ def test_load_profile() -> None:
     assert resp.json().get("loaded") is True
 
 
-def test_delete_profile() -> None:
+def test_delete_profile(client: TestClient) -> None:
     client.post("/api/profiles", json={"name": "to_delete", "comment": ""})
     resp = client.delete("/api/profiles/to_delete")
     assert resp.status_code == 200

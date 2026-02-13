@@ -1,0 +1,44 @@
+========================================
+ИНСТРУКЦИЯ ПО ЗАПУСКУ
+========================================
+
+✅ Контейнеры запущены:
+   docker compose ps
+
+✅ Backend работает:
+   curl http://localhost:8000/health
+
+✅ WebSocket работает:
+   (тест прошёл успешно)
+
+========================================
+ЧТО ДЕЛАТЬ ДАЛЬШЕ:
+========================================
+
+1. ЗАКРОЙТЕ ВСЕ ВКЛАДКИ с localhost:8080
+
+2. Откройте В ПРИВАТНОМ ОКНЕ:
+   - Chrome/Edge/Yandex: Ctrl+Shift+N
+   - Firefox: Ctrl+Shift+P
+   
+   Адрес: http://localhost:8080
+
+3. Если баннер "Переподключение..." появится:
+   - Нажмите F12 (DevTools)
+   - Нажмите Ctrl+Shift+R несколько раз
+   - Проверьте Console - должно быть:
+     "WebSocket connected to channel: server"
+     "WebSocket connected to channel: registers"
+     "WebSocket connected to channel: generators"
+
+4. Если баннер исчез - ВСЁ РАБОТАЕТ! ✅
+
+========================================
+ФАЙЛЫ СПРАВКИ:
+========================================
+
+- START_HERE.md - Быстрый старт
+- QUICK_FIX.md - Решение проблем за 3 шага
+- docs/TROUBLESHOOTING_WEBSOCKET.md - Детальный troubleshooting
+
+========================================

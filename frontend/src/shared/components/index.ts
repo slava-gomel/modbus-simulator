@@ -9,3 +9,5 @@ export type { RadioGroupProps, RadioOption } from "./RadioGroup";
 
 export { NumericField } from "./NumericField";
 export type { NumericFieldProps } from "./NumericField";
+
+export { ConnectionStatus } from "./ConnectionStatus";

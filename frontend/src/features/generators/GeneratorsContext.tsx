@@ -1,15 +1,15 @@
 import React, { createContext, useState, useCallback, ReactNode } from "react";
 import { SignalGeneratorConfig, fetchSignalGenerators, saveSignalGenerators } from "../../api";
 import { useLogsContext } from "../logs";
-import { usePolling } from "../../shared/hooks";
-import { GENERATOR_CHART_POLL_MS, GENERATOR_CHART_MAX_SAMPLES, DEFAULT_NEON_COLOR } from "../../shared/constants";
-import { fetchRegisters } from "../../api";
+import { useWebSocket } from "../../shared/hooks";
+import { GENERATOR_CHART_MAX_SAMPLES, DEFAULT_NEON_COLOR } from "../../shared/constants";
 import { getGeneratorNumericValue, formatGeneratorLogParams } from "./utils";
 
 interface GeneratorsContextValue {
   signalGenerators: SignalGeneratorConfig[];
   editingGenerator: SignalGeneratorConfig | null;
-  generatorValues: Record<string, number[]>;
+  // Текущее числовое значение генератора
+  generatorValues: Record<string, number>;
   generatorChartSamples: Record<string, number[]>;
   loadGenerators: () => Promise<void>;
   handleCreateGenerator: () => void;
@@ -27,7 +27,9 @@ export const GeneratorsProvider: React.FC<{ children: ReactNode }> = ({ children
   const { pushLog } = useLogsContext();
   const [signalGenerators, setSignalGenerators] = useState<SignalGeneratorConfig[]>([]);
   const [editingGenerator, setEditingGenerator] = useState<SignalGeneratorConfig | null>(null);
-  const [generatorValues, setGeneratorValues] = useState<Record<string, number[]>>({});
+  // Текущее числовое значение генератора по его id (не сырые регистры)
+  const [generatorValues, setGeneratorValues] = useState<Record<string, number>>({});
+  // История числовых значений для построения графиков
   const [generatorChartSamples, setGeneratorChartSamples] = useState<Record<string, number[]>>({});
 
   const loadGenerators = useCallback(async () => {
@@ -41,37 +43,39 @@ export const GeneratorsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Polling значений генераторов для живого графика
-  usePolling(
-    async () => {
-      if (signalGenerators.length === 0) {
-        setGeneratorValues({});
-        setGeneratorChartSamples({});
-        return;
+  // WebSocket подписка на обновления генераторов (без deps — подписка стабильна, иначе теряются сообщения)
+  useWebSocket(
+    "generators",
+    (event, data) => {
+      if (event === "generator_values" && data.generators) {
+        const generators = data.generators as Array<{
+          id: string;
+          name: string;
+          value: number;
+          registers: number[];
+          neon_color?: string;
+        }>;
+        if (!Array.isArray(generators) || generators.length === 0) return;
+
+        setGeneratorValues((prev) => {
+          const next = { ...prev };
+          generators.forEach((g) => {
+            next[g.id] = g.value;
+          });
+          return next;
+        });
+
+        setGeneratorChartSamples((prev) => {
+          const next: Record<string, number[]> = { ...prev };
+          generators.forEach((g) => {
+            const buf = [...(prev[g.id] ?? []), g.value].slice(-GENERATOR_CHART_MAX_SAMPLES);
+            next[g.id] = buf;
+          });
+          return next;
+        });
       }
-      const nextValues: Record<string, number[]> = {};
-      for (const g of signalGenerators) {
-        try {
-          const data = await fetchRegisters("holding", g.start_address, g.register_count);
-          nextValues[g.id] = data.values;
-        } catch {
-          nextValues[g.id] = [];
-        }
-      }
-      setGeneratorValues((prev) => (JSON.stringify(prev) === JSON.stringify(nextValues) ? prev : nextValues));
-      setGeneratorChartSamples((prev) => {
-        const next: Record<string, number[]> = { ...prev };
-        for (const g of signalGenerators) {
-          const raw = nextValues[g.id] ?? [];
-          const num = getGeneratorNumericValue(g, raw);
-          const buf = [...(prev[g.id] ?? []), num].slice(-GENERATOR_CHART_MAX_SAMPLES);
-          next[g.id] = buf;
-        }
-        return next;
-      });
     },
-    signalGenerators.length > 0 ? GENERATOR_CHART_POLL_MS : null,
-    [signalGenerators]
+    []
   );
 
   const emptyGenerator = (): SignalGeneratorConfig => ({

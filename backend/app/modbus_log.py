@@ -1,9 +1,13 @@
 """Буфер событий Modbus (запросы/ответы) для отображения в GUI."""
 from __future__ import annotations
 
+import asyncio
 import threading
 from datetime import datetime, timezone
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from .websocket_manager import ConnectionManager
 
 
 class ModbusLogEntry(TypedDict, total=False):
@@ -23,6 +27,13 @@ _MAX_ENTRIES = 300
 _lock = threading.Lock()
 _entries: list[ModbusLogEntry] = []
 _next_id = 0
+_ws_manager: ConnectionManager | None = None
+
+
+def set_websocket_manager(manager: ConnectionManager) -> None:
+    """Установить WebSocket manager для broadcast событий."""
+    global _ws_manager
+    _ws_manager = manager
 
 
 def append(entry_type: str, message: str, **fields: object) -> None:
@@ -47,6 +58,21 @@ def append(entry_type: str, message: str, **fields: object) -> None:
         _next_id += 1
         while len(_entries) > _MAX_ENTRIES:
             _entries.pop(0)
+    
+    # Broadcast события через WebSocket
+    if _ws_manager:
+        try:
+            loop = asyncio.get_event_loop()
+            asyncio.run_coroutine_threadsafe(
+                _ws_manager.broadcast("server", {
+                    "event": "modbus_log",
+                    "data": [entry]
+                }),
+                loop
+            )
+        except RuntimeError:
+            # Event loop не доступен
+            pass
 
 
 def get_events(since_id: int) -> tuple[list[ModbusLogEntry], int]:

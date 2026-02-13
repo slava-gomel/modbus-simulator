@@ -16,7 +16,8 @@
 - Vite – сборка и dev-server.
 - React 18 + ReactDOM.
 - axios – HTTP-клиент.
-- Nginx – отдача статики и reverse proxy `/api` -> backend.
+- WebSocket API – real-time коммуникация (нативный браузерный API).
+- Nginx – отдача статики и reverse proxy `/api` + `/ws` -> backend.
 
 **Инфраструктура:**
 - Dockerfile для backend (python:3.12-slim).

@@ -1,22 +1,29 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, HTTPException, Query
 
 from ..modbus_core import ModbusSimulatorCore
 from ..models import RegisterKind, RegisterRangeRequest, RegisterRangeResponse
 from ..storage import Storage
 
+if TYPE_CHECKING:
+    from ..websocket_manager import ConnectionManager
+
 
 router = APIRouter(prefix="/state", tags=["state"])
 
 _core: ModbusSimulatorCore | None = None
 _storage: Storage | None = None
+_ws_manager: ConnectionManager | None = None
 
 
-def init_state_api(core: ModbusSimulatorCore, storage: Storage) -> None:
-    global _core, _storage  # noqa: PLW0603
+def init_state_api(core: ModbusSimulatorCore, storage: Storage, ws_manager: ConnectionManager | None = None) -> None:
+    global _core, _storage, _ws_manager  # noqa: PLW0603
     _core = core
     _storage = storage
+    _ws_manager = ws_manager
 
 
 def _get_core() -> ModbusSimulatorCore:
@@ -54,7 +61,7 @@ def read_registers(
 
 
 @router.put("/{kind}", response_model=RegisterRangeResponse)
-def write_single(
+async def write_single(
     kind: RegisterKind,
     start: int = Query(0, ge=0),
     value: int = Query(...),
@@ -86,12 +93,19 @@ def write_single(
         values = core.read_coils(start, 1)
     else:
         values = core.read_holding_registers(start, 1)
+    
+    # WebSocket broadcast изменений
+    if _ws_manager:
+        await _ws_manager.broadcast("registers", {
+            "event": "registers_changed",
+            "data": {"kind": kind, "start": start, "count": 1, "values": values}
+        })
 
     return RegisterRangeResponse(kind=kind, start=start, values=values)
 
 
 @router.put("/{kind}/batch", response_model=RegisterRangeResponse)
-def write_multiple(
+async def write_multiple(
     kind: RegisterKind,
     body: RegisterRangeRequest,
 ) -> RegisterRangeResponse:
@@ -128,6 +142,13 @@ def write_multiple(
         read_back = core.read_coils(start, read_count)
     else:
         read_back = core.read_holding_registers(start, read_count)
+    
+    # WebSocket broadcast изменений
+    if _ws_manager:
+        await _ws_manager.broadcast("registers", {
+            "event": "registers_changed",
+            "data": {"kind": kind, "start": start, "count": read_count, "values": read_back}
+        })
 
     return RegisterRangeResponse(kind=kind, start=start, values=read_back)
 

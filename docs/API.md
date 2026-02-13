@@ -3,7 +3,8 @@
 Полная документация REST API для Modbus Simulator.
 
 **Base URL:** `http://localhost:8000/api`  
-**Swagger UI:** `http://localhost:8000/docs`
+**Swagger UI:** `http://localhost:8000/docs`  
+**WebSocket URL:** `ws://localhost:8000/ws/{channel}`
 
 ## Authentication
 
@@ -18,7 +19,36 @@ export MB_AUTH_PASS=secret
 
 ---
 
-## Endpoints
+## WebSocket Real-time Communication
+
+Для real-time обновлений используются WebSocket соединения. Подробная документация в [WEBSOCKET.md](WEBSOCKET.md).
+
+### Endpoints
+
+- **`/ws/registers`** - обновления регистров
+- **`/ws/server`** - статус сервера и Modbus лог
+- **`/ws/generators`** - значения генераторов сигналов
+
+### Пример подключения
+
+```javascript
+const ws = new WebSocket('ws://localhost:8000/ws/registers');
+
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  console.log('Event:', message.event);
+  console.log('Data:', message.data);
+};
+
+// Keep-alive
+setInterval(() => ws.send('ping'), 30000);
+```
+
+См. [WEBSOCKET.md](WEBSOCKET.md) для полной документации по форматам событий и использованию.
+
+---
+
+## REST Endpoints
 
 ### Config - Конфигурация Modbus
 

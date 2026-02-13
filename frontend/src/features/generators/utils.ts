@@ -13,13 +13,13 @@ export const neonGlowStyle = (hex: string | null | undefined): React.CSSProperti
 };
 
 /**
- * Форматирование значения генератора по его data_type
+ * Форматирование значения генератора по его data_type.
+ * Принимает уже вычисленное числовое значение (из WebSocket).
  */
-export const formatGeneratorValue = (g: SignalGeneratorConfig, rawValues: number[]): string => {
-  const n = getGeneratorNumericValue(g, rawValues);
-  if (rawValues.length === 0) return "—";
-  if (g.data_type === "int16") return String(Math.round(n));
-  return Number.isFinite(n) ? String(n) : "—";
+export const formatGeneratorValue = (g: SignalGeneratorConfig, value: number | undefined): string => {
+  if (value === undefined) return "—";
+  if (g.data_type === "int16") return String(Math.round(value));
+  return Number.isFinite(value) ? String(value) : "—";
 };
 
 /**

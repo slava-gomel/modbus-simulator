@@ -20,7 +20,34 @@
 - App.tsx – только композиция (~140 строк)
 - AppProviders.tsx – управление зависимостями между контекстами
 
-**Важно:** Порядок providers критичен! RegistersProvider должен быть выше ServerProviderWrapper для передачи callback `markRegistersChanged`.
+**Важно:** Порядок providers критичен! WebSocketProvider должен быть выше всех features, которые используют WebSocket. RegistersProvider должен быть выше ServerProviderWrapper для передачи callback `markRegistersChanged`.
+
+### Начальная загрузка в App (однократно при авторизации)
+**Проблема:** Если эффект в App.tsx зависит от `[authenticated, loadConfig, refreshProfiles, loadGenerators]`, вызов `refreshProfiles()` может обновить `currentProfileSlug` → пересоздаётся `refreshProfiles` → эффект срабатывает снова → бесконечный цикл запросов к /config, /generators, /profiles (лавина, Stalled, ERR_INSUFFICIENT_RESOURCES, таблица регистров не загружается).
+**Решение:** Эффект начальной загрузки должен зависеть только от `[authenticated]`. Не добавлять loadConfig/refreshProfiles/loadGenerators в deps; при необходимости использовать eslint-disable-next-line react-hooks/exhaustive-deps с комментарием.
+
+### WebSocket Real-time Communication
+**Проблема:** HTTP polling создавал задержки обновления (1.5s для регистров, 250ms для логов) и нагрузку на сервер.
+**Решение:** WebSocket с раздельными каналами:
+- **Backend:** `ConnectionManager` с thread-safe broadcast через `asyncio.run_coroutine_threadsafe()`
+- **Frontend:** `WebSocketContext` с автоматическим переподключением (exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s)
+- **Каналы:** `/ws/registers`, `/ws/server`, `/ws/generators`
+- **UI:** `ConnectionStatus` banner при проблемах с соединением (автоматически скрывается)
+
+**Важно:**
+- Все WebSocket сообщения имеют формат: `{event: string, data: any}`
+- Keep-alive: клиент отправляет `ping` каждые 30s, сервер отвечает `pong`
+- Broadcast из threading: использовать `asyncio.run_coroutine_threadsafe()` с try/except (RuntimeError)
+- События отправляются только при изменениях, не периодически (кроме generators ~120ms)
+- **Генераторы сигналов:** движок проверяет обновления каждые 20ms, собирает все изменения за цикл и отправляет batch событие `registers_changed` через `/ws/registers`
+- **Batch обновления:** последовательные регистры группируются в одно событие для эффективности
+- **Оптимизация RegistersContext:** получает события от `/ws/registers` и обновляет значения локально (setValues), без вызова reloadRegisters()
+- **Частота обновлений:** регистры обновляются так же быстро как генераторы (~20-100ms в зависимости от update_period_ms)
+
+**Миграция с polling:**
+- Заменить `usePolling` на `useWebSocket(channel, (event, data) => {...}, deps)`
+- Удалить polling константы из `constants.ts`
+- Обновить Context для обработки WebSocket событий вместо периодических запросов
 
 ### API Structure (Frontend)
 **Проблема:** Монолитный api.ts (194 строки) с смешанными доменами.
@@ -87,10 +114,17 @@
 
 ### Docker Compose
 - Backend слушает на порту 8000
-- Frontend (nginx) слушает на порту 3000
-- Modbus TCP на порту 502
+- Frontend (nginx) слушает на порту 8080
+- Modbus TCP на порту 1502 (нестандартный для запуска без root)
 - Volume `sim_data` монтируется в `/app/data` backend
 - **Важно:** При изменении зависимостей требуется rebuild образов
+
+### WebSocket
+- **Кеш браузера:** После rebuild frontend требуется Hard Refresh (Ctrl+Shift+R) в браузере
+- **Ограничение переподключений:** Максимум 10 попыток, после чего требуется refresh страницы
+- **React.StrictMode отключен:** Предотвращает проблемы с двойным монтированием WebSocket
+- **Nginx timeouts:** 7 дней для long-living WebSocket connections
+- **Ping interval:** 10 секунд для keep-alive
 
 ### Тесты
 - Backend: pytest с временным DATA_DIR (см. conftest.py)
@@ -98,9 +132,10 @@
 - Frontend: тестов пока нет (TODO: добавить тесты для converters, components, hooks)
 
 ### Performance
-- Frontend: polling интервалы определены в `shared/constants.ts`
-- Frontend: генераторы обновляют графики каждые ~120ms
-- Backend: генераторы работают в отдельном потоке с настраиваемым `update_period_ms`
+- Frontend: WebSocket real-time обновления (no polling)
+- Frontend: генераторы обновляют графики каждые ~100ms через WebSocket
+- Backend: генераторы проверяются каждые 20ms, обновляются согласно `update_period_ms` (обычно 100ms)
+- Backend: batch broadcast всех изменений регистров за цикл для эффективности
 
 ## Эволюция проекта
 
@@ -201,7 +236,7 @@
 ### Frontend (добавить TODO)
 - Unit тесты для converters.ts (критичный модуль)
 - Unit тесты для formatters.ts
-- Unit тесты для shared hooks (usePolling, useApiCall, useCollapse)
+- Unit тесты для shared hooks (useWebSocket, useApiCall, useCollapse)
 - Component тесты для shared UI компонентов
 - Integration тесты для Context providers
 
@@ -209,8 +244,8 @@
 
 1. ✅ **Тесты:** Unit тесты для converters (backend + frontend) – ЗАВЕРШЕНО
 2. ✅ **Modbus тесты:** Полное покрытие всех FC01-FC06, FC15-FC16 (59 тестов) – ЗАВЕРШЕНО
-3. **CI/CD:** GitHub Actions для запуска тестов
-4. **WebSocket:** Real-time обновления вместо polling
+3. ✅ **WebSocket:** Real-time обновления вместо polling; исправлена лавина запросов при начальной загрузке – ЗАВЕРШЕНО
+4. **CI/CD:** GitHub Actions для запуска тестов
 5. **E2E тесты:** Playwright для критичных пользовательских сценариев
 6. **Modbus E2E:** Тесты с реальным TCP клиентом
 7. **Production готовность:** CORS whitelist, HTTPS, rate limiting

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    """Fixture для TestClient с правильным lifecycle."""
+    with TestClient(app) as c:
+        yield c
 
 
-def test_generators_empty_list() -> None:
+def test_generators_empty_list(client: TestClient) -> None:
     resp = client.get("/api/generators")
     assert resp.status_code == 200
     data = resp.json()
@@ -16,7 +21,7 @@ def test_generators_empty_list() -> None:
     assert isinstance(data["generators"], list)
 
 
-def test_create_simple_generator_and_updates_ok() -> None:
+def test_create_simple_generator_and_updates_ok(client: TestClient) -> None:
     # создаём один простой генератор INT16 на адресе 0
     payload = {
         "generators": [

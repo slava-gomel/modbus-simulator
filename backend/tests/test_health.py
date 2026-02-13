@@ -1,12 +1,16 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 
 
-client = TestClient(app)
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
-def test_health_ok() -> None:
+def test_health_ok(client: TestClient) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
     data = resp.json()

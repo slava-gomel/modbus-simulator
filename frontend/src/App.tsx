@@ -10,6 +10,7 @@ import { LogView } from "./features/logs";
 import { useConfig } from "./features/config";
 import { useGenerators } from "./features/generators";
 import { useCollapse } from "./shared/hooks";
+import { ConnectionStatus } from "./shared/components";
 
 /**
  * Основной компонент приложения
@@ -18,6 +19,7 @@ import { useCollapse } from "./shared/hooks";
 export const App: React.FC = () => {
   return (
     <AppProviders>
+      <ConnectionStatus />
       <AppContent />
     </AppProviders>
   );
@@ -29,14 +31,17 @@ const AppContent: React.FC = () => {
   const { refreshProfiles, profiles, currentProfileSlug } = useProfiles();
   const { loadGenerators } = useGenerators();
 
-  // Загрузка начальных данных при успешной авторизации
+  // Однократная загрузка начальных данных при успешной авторизации.
+  // Не добавляем loadConfig/refreshProfiles/loadGenerators в deps — иначе при обновлении
+  // состояния в этих вызовах (например setCurrentProfileSlug) колбэки пересоздаются
+  // и эффект уходит в бесконечный цикл (сотни запросов к /config, /generators, /profiles).
   useEffect(() => {
-    if (authenticated) {
-      void loadConfig();
-      void refreshProfiles();
-      void loadGenerators();
-    }
-  }, [authenticated, loadConfig, refreshProfiles, loadGenerators]);
+    if (!authenticated) return;
+    void loadConfig();
+    void refreshProfiles();
+    void loadGenerators();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
 
   // Показать форму логина, если требуется авторизация
   if (authRequiredState === true && !authenticated) {

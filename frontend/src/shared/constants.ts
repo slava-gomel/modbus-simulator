@@ -1,11 +1,7 @@
 // Константы приложения
 
 export const MAX_LOG_ENTRIES = 300;
-export const REGISTERS_AUTO_REFRESH_MS = 1500;
-export const GENERATOR_CHART_POLL_MS = 120;
 export const GENERATOR_CHART_MAX_SAMPLES = 80;
-export const SERVER_STATUS_POLL_MS = 5000;
-export const MODBUS_LOG_POLL_MS = 250;
 export const DEFAULT_NEON_COLOR = "#3b82f6";
 export const REGISTER_FLASH_DURATION_MS = 3000;
 

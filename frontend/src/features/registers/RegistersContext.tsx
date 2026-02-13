@@ -2,8 +2,8 @@ import React, { createContext, useState, useCallback, ReactNode, useRef } from "
 import { RegisterKind, RegisterFormatKind, RegisterSign, RegisterOrder } from "../../shared/types";
 import { fetchRegisters, writeSingle, writeBatch } from "../../api";
 import { useLogsContext } from "../logs";
-import { usePolling } from "../../shared/hooks";
-import { REGISTERS_AUTO_REFRESH_MS, REGISTER_FLASH_DURATION_MS } from "../../shared/constants";
+import { useWebSocket } from "../../shared/hooks";
+import { REGISTER_FLASH_DURATION_MS } from "../../shared/constants";
 import { makeRegisterKey, getFormatGroupSize } from "./formatters";
 import { convertStringToRegisters, isEmptyInput } from "./converters";
 
@@ -76,11 +76,41 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [selectedKind, start, count, pushLog]);
 
-  // Автообновление значений регистров
-  usePolling(
-    () => reloadRegisters(true),
-    REGISTERS_AUTO_REFRESH_MS,
-    [selectedKind, start, count]
+  // Первичная загрузка значений регистров и обновление при смене диапазона/типа
+  React.useEffect(() => {
+    void reloadRegisters(true);
+  }, [reloadRegisters]);
+
+  // WebSocket подписка на изменения регистров (мгновенное обновление)
+  useWebSocket(
+    "registers",
+    useCallback((event: string, data: any) => {
+      if (event === "registers_changed") {
+        // Обновляем только если изменения касаются нашего диапазона
+        if (
+          data.kind === selectedKind &&
+          data.start < start + count &&
+          data.start + data.count > start
+        ) {
+          // Быстрое локальное обновление без HTTP запроса
+          setValues((prevValues) => {
+            const newValues = [...prevValues];
+            const changeStart = Math.max(0, data.start - start);
+            const changeEnd = Math.min(count, data.start + data.count - start);
+            
+            for (let i = changeStart; i < changeEnd; i++) {
+              const dataIndex = i - (data.start - start);
+              if (dataIndex >= 0 && dataIndex < data.values.length) {
+                newValues[i] = data.values[dataIndex];
+              }
+            }
+            
+            return newValues;
+          });
+        }
+      }
+    }, [selectedKind, start, count]),
+    []
   );
 
   const handleCellChange = useCallback(async (index: number, newValue: number) => {
