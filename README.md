@@ -78,6 +78,8 @@ Frontend: `http://localhost:5173`, API прокси `/api` → `http://localhost
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Архитектура проекта, структура модулей, data flow
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)** — Руководство для разработчиков, code style, git workflow
 - **[docs/API.md](./docs/API.md)** — Полная REST API документация
+- **[TESTING.md](./TESTING.md)** — Руководство по тестированию (backend + frontend)
+- **[DOCKER_REBUILD.md](./DOCKER_REBUILD.md)** — Инструкции по пересборке Docker после изменений
 
 ### Структура проекта
 
@@ -154,17 +156,36 @@ modbud_simulator/
 
 ```bash
 cd backend
+pip install -e .[dev]  # Установить зависимости для тестов
 pytest tests/ -v
 pytest --cov=app  # С покрытием кода
 ```
+
+**Покрытие:** 94 теста (health, state, server, profiles, generators, encoding_utils, **modbus_core, modbus_integration**)
 
 ### Frontend
 
 ```bash
 cd frontend
+npm install  # Установить зависимости для тестов
 npm test
-npm test -- --coverage
+npm run test:ui  # UI интерфейс
+npm run test:coverage  # С покрытием кода
 ```
+
+**Покрытие:** 70+ тестов (converters, usePolling, useCollapse)
+
+### Docker
+
+```bash
+# Backend тесты
+docker compose run --rm backend pytest tests/ -v
+
+# Frontend тесты
+docker compose run --rm frontend npm test
+```
+
+См. [TESTING.md](./TESTING.md) для подробностей.
 
 ## Авторизация (опционально)
 

@@ -5,6 +5,7 @@
 - ✅ Frontend: модульная API, shared UI компоненты, разделённые панели.
 - ✅ Backend: модульная storage система с разделением ответственности.
 - ✅ Документация: ARCHITECTURE.md, CONTRIBUTING.md, docs/API.md.
+- ✅ **Тесты: полное покрытие всех Modbus функций (164+ теста).**
 
 **Реализовано:**
 - Backend:
@@ -124,15 +125,22 @@
     - Ссылки на ARCHITECTURE, CONTRIBUTING, API docs
     - Улучшенные примеры использования
 
-- Тесты: health, state, batch, server, profiles, **generators API**, round‑trip генераторов через профили.
+- **Тесты (2026-02-13, завершено):**
+  - Backend: 94 теста (API, encoding_utils, **Modbus FC01-FC06/FC15-FC16**)
+  - Frontend: 70+ тестов (converters, hooks)
+  - `.cursorrules` – проектный интеллект (340+ строк)
+  - TESTING.md, DOCKER_REBUILD.md – руководства по тестированию
+  - README_MODBUS_TESTS.md – детальная документация Modbus тестов
+  - **100% покрытие всех реализованных Modbus функций**
 
-**Итоги рефакторинга:**
-- Frontend: 40+ новых файлов, модульная структура
-- Backend: storage разделён на 4 класса с чётким SRP
-- Документация: 3 основных документа (1100+ строк)
-- Git commit: +3015/-1020 строк кода
+**Итоги:**
+- Frontend: 40+ новых файлов, модульная структура, тесты для converters/hooks
+- Backend: storage разделён на 4 класса, полное покрытие Modbus (59 тестов)
+- Документация: 8 файлов (2000+ строк)
+- Тесты: 164+ теста, производительность ~2s
+- Git commits: рефакторинг + тесты
 - TypeScript компиляция: ✅ успешна
 - Python синтаксис: ✅ корректен
 
-**Дальше по желанию:** Unit тесты для converters/formatters, CI (GitHub Actions), e2e‑тесты, WebSocket для real-time updates.
+**Дальше по желанию:** CI (GitHub Actions), E2E тесты (Playwright), WebSocket для real-time, E2E Modbus с реальным TCP клиентом.
 

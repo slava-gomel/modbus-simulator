@@ -1,0 +1,216 @@
+# Modbus Simulator - Project Intelligence
+
+## Критические архитектурные решения
+
+### Backend Storage System
+**Проблема:** Монолитный storage.py (267 строк) смешивал работу с config, state и profiles.
+**Решение:** Модульная структура с четким Single Responsibility Principle:
+- `base.py` – общий функционал (ensure_data_dir, yaml/json операции)
+- `config.py` – работа только с config.yaml
+- `state.py` – работа только с state.json, включая метод `_apply_state`
+- `profiles.py` – работа только с профилями
+- `__init__.py` – фасад для композиции всех модулей
+
+**Важно:** При работе с storage всегда использовать модульные методы (storage.config.*, storage.state.*, storage.profiles.*), а не напрямую обращаться к файлам.
+
+### Frontend Architecture
+**Проблема:** App.tsx был 2714 строк с вложенной бизнес-логикой.
+**Решение:** Feature-based модульная архитектура:
+- Каждая feature = Context (state + logic) + UI компоненты
+- App.tsx – только композиция (~140 строк)
+- AppProviders.tsx – управление зависимостями между контекстами
+
+**Важно:** Порядок providers критичен! RegistersProvider должен быть выше ServerProviderWrapper для передачи callback `markRegistersChanged`.
+
+### API Structure (Frontend)
+**Проблема:** Монолитный api.ts (194 строки) с смешанными доменами.
+**Решение:** Доменная структура:
+- `client.ts` – axios instance с auth interceptor (401 handling)
+- `types.ts` – все API типы (Response/Request DTO)
+- `registers.ts`, `generators.ts`, `profiles.ts`, `server.ts` – доменные модули
+- `index.ts` – barrel exports
+
+**Важно:** Всегда импортировать из `api/` через barrel exports, не напрямую из модулей.
+
+## Ключевые паттерны и предпочтения
+
+### CSS и стилизация
+- **Подсветка регистров:** Стили применяются к `input` внутри ячейки, а не к `td`
+- **Неоновая подсветка генераторов:** настраиваемый цвет через поле `neon_color` в SignalGeneratorConfig
+- **Зелёная вспышка Modbus-записей:** animation применяется к input элементу с классом `highlight-flash`
+- **Переиспользуемые классы:** `panel`, `field-*`, `btn`, `registers-table*`, `log-*`, `generator-value-display`
+
+### Генераторы сигналов
+**Критическое решение:** Движок хранит ВСЕ генераторы (включённые и выключенные), а фильтрация по `enabled` происходит только в run-loop.
+**Причина:** Обеспечить корректный round-trip через профили и API генераторов. При сохранении профиля выключенные генераторы не должны теряться.
+
+### Modbus Log Events
+**Структура записей FC05/06/15/16:**
+- Тип события: `modbus_write`
+- Обязательные поля: `kind` (coils/holding), `start`, `count`
+- Реализация: в `modbus_server.InMemoryDataStore.setValues`
+- Назначение: точная привязка изменений к диапазонам регистров для UI подсветки
+
+### Converters (Frontend)
+**Принцип:** Вся логика конвертации форматов изолирована в `features/registers/converters.ts`.
+- Результат: `ConversionResult { registers: number[], error?: string }`
+- Функции: `convertToInt16/32/64`, `convertToFloat32/64`, `convertToBitmap`
+- Валидация: `isEmptyInput`, `normalizeNumericString`
+
+**Важно:** RegistersContext не должен содержать логику конвертации – только вызов функций из converters.ts
+
+## Критические пути разработки
+
+### Добавление нового формата регистров
+1. Добавить тип в `shared/types/registers.ts` (RegisterFormatKind)
+2. Реализовать конвертер в `features/registers/converters.ts`
+3. Добавить форматтер для отображения в `features/registers/formatters.ts`
+4. Обновить UI в `RegistersFormatSelector.tsx`
+5. Добавить тесты для конвертера
+
+### Добавление нового API endpoint
+1. Backend: создать роут в `app/api/*_api.py`
+2. Backend: добавить модель в `app/models.py` (если нужно)
+3. Frontend: добавить типы в `api/types.ts`
+4. Frontend: добавить метод в соответствующий модуль `api/*.ts`
+5. Frontend: использовать в Context соответствующей feature
+6. Добавить тесты в `backend/tests/test_*_api.py`
+
+### Добавление нового типа сигнала генератора
+1. Backend: добавить в `signal_generators.py` (метод генерации)
+2. Backend: добавить в модель `WaveType` в `models.py`
+3. Frontend: добавить в `api/types.ts` (SignalGeneratorConfig)
+4. Frontend: обновить UI в `GeneratorForm.tsx`
+5. Frontend: добавить логику построения графика в `generators/utils.ts`
+
+## Известные проблемы и ограничения
+
+### Docker Compose
+- Backend слушает на порту 8000
+- Frontend (nginx) слушает на порту 3000
+- Modbus TCP на порту 502
+- Volume `sim_data` монтируется в `/app/data` backend
+- **Важно:** При изменении зависимостей требуется rebuild образов
+
+### Тесты
+- Backend: pytest с временным DATA_DIR (см. conftest.py)
+- Backend: тесты генераторов используют `time.sleep()` для ожидания фоновых обновлений
+- Frontend: тестов пока нет (TODO: добавить тесты для converters, components, hooks)
+
+### Performance
+- Frontend: polling интервалы определены в `shared/constants.ts`
+- Frontend: генераторы обновляют графики каждые ~120ms
+- Backend: генераторы работают в отдельном потоке с настраиваемым `update_period_ms`
+
+## Эволюция проекта
+
+### Фаза 1 (2026-02-09 ~ 2026-02-10)
+- Начальная реализация backend и frontend
+- Monolithic architecture (App.tsx 2714 строк)
+- Monolithic storage.py (267 строк)
+- Monolithic api.ts (194 строки)
+
+### Фаза 2 (2026-02-11 ~ 2026-02-12)
+- Добавление генераторов сигналов
+- Интеграция генераторов в профили
+- Modbus log с событиями записи
+
+### Фаза 3 (2026-02-13) - Комплексный рефакторинг
+- **Backend:** Модульная storage система (5 файлов, SRP)
+- **Frontend:** Feature-based архитектура (40+ файлов)
+- **Frontend:** Модульная API структура (7 модулей)
+- **Frontend:** Shared UI компоненты (Button, Input, RadioGroup, NumericField)
+- **Frontend:** Extracted converters и formatters
+- **Документация:** ARCHITECTURE.md (287 строк), CONTRIBUTING.md (420 строк), docs/API.md (400+ строк)
+- **Результат:** +3015/-1020 строк, 40 файлов изменено
+
+## Инструменты и зависимости
+
+### Backend
+- Python 3.10+, FastAPI, uvicorn, pymodbus 3.6.x, pydantic v2
+- pytest, httpx, ruff для разработки
+- **Важно:** pymodbus 3.6.x – критичная версия, 3.7+ может сломать совместимость
+
+### Frontend
+- React 18, TypeScript, Vite
+- axios для HTTP запросов
+- React Context API (без Redux/Zustand)
+- **Важно:** strict TypeScript mode, все компоненты типизированы
+
+### Development Flow
+- Local: backend на 8000, frontend на 5173 (vite dev server с proxy)
+- Docker: backend на 8000, frontend (nginx) на 3000
+- **Важно:** В локальной разработке vite проксирует `/api` на `http://localhost:8000`
+
+## Code Style Preferences
+
+### TypeScript
+- Всегда использовать `React.FC<Props>` для компонентов
+- Именование: PascalCase (компоненты), camelCase (функции/переменные)
+- Избегать `any`, всегда явная типизация
+- React.memo для оптимизации, useMemo/useCallback для предотвращения лишних рендеров
+
+### Python
+- PEP 8, type hints везде
+- Google-style docstrings
+- Использовать `from __future__ import annotations` для forward references
+- ruff для линтинга и форматирования
+
+### Git Workflow
+- Commit messages на русском языке
+- Формат: "Добавить X", "Исправить Y", "Рефакторинг Z"
+- Логичные атомарные коммиты
+- **Важно:** Проект уже инициализирован с Git, не использовать `git init`
+
+## Memory Bank Integration
+
+Проект использует Memory Bank структуру для документации:
+- `projectbrief.md` – краткое описание и текущее состояние
+- `productContext.md` – назначение и пользователи
+- `systemPatterns.md` – архитектурные паттерны (>100 строк)
+- `techContext.md` – технологический стек
+- `activeContext.md` – текущий фокус разработки
+- `progress.md` – статус реализации
+
+**Важно:** При значительных изменениях обновлять Memory Bank командой "update memory bank".
+
+## Testing Strategy
+
+### Backend (существующие тесты)
+- `test_health.py` – проверка /health endpoint
+- `test_state_api.py` – чтение/запись регистров, batch операции
+- `test_server_api.py` – управление Modbus сервером
+- `test_profiles_api.py` – сохранение/загрузка профилей
+- `test_generators_api.py` – создание генераторов, проверка обновления регистров
+- `test_encoding_utils.py` – конвертация INT16/FLOAT32/FLOAT64 (22 теста)
+- **`test_modbus_core.py` – unit тесты всех Modbus функций (41 тест)**
+  - RegisterBlock (9 тестов)
+  - FC01-FC06 (чтение/запись coils, discrete inputs, holding, input)
+  - FC15-FC16 (множественная запись)
+  - Integration scenarios (5 тестов)
+- **`test_modbus_integration.py` – integration тесты InMemoryDataStore (18 тестов)**
+  - Все FC01-FC06, FC15-FC16 через datastore adapter
+  - Комплексные сценарии (batch, mixed operations, boundaries)
+
+### Backend (добавить TODO)
+- Unit тесты для `signal_generators.py`
+- Integration тесты для Signal Generator Engine
+- Unit тесты для storage модулей (сложная интеграция с AppConfig)
+- E2E тесты с реальным Modbus TCP клиентом
+
+### Frontend (добавить TODO)
+- Unit тесты для converters.ts (критичный модуль)
+- Unit тесты для formatters.ts
+- Unit тесты для shared hooks (usePolling, useApiCall, useCollapse)
+- Component тесты для shared UI компонентов
+- Integration тесты для Context providers
+
+## Ближайшие улучшения (по приоритету)
+
+1. ✅ **Тесты:** Unit тесты для converters (backend + frontend) – ЗАВЕРШЕНО
+2. ✅ **Modbus тесты:** Полное покрытие всех FC01-FC06, FC15-FC16 (59 тестов) – ЗАВЕРШЕНО
+3. **CI/CD:** GitHub Actions для запуска тестов
+4. **WebSocket:** Real-time обновления вместо polling
+5. **E2E тесты:** Playwright для критичных пользовательских сценариев
+6. **Modbus E2E:** Тесты с реальным TCP клиентом
+7. **Production готовность:** CORS whitelist, HTTPS, rate limiting

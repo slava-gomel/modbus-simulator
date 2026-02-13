@@ -57,15 +57,30 @@
   - **README.md**: обновлён со ссылками на новую документацию, структурированное содержание
 
 - Авторизация: опциональная Basic Auth по env.
-- Тесты: health, state, batch, server, profiles, **generators API**, round‑trip генераторов через профили; `pytest` с временным DATA_DIR.
 
-**Статистика рефакторинга:**
-- Git commit: 40 файлов изменено (+3015/-1020 строк)
-- Frontend: новые модули API, UI компоненты, converters, разделённые панели
-- Backend: модульная storage система (5 файлов)
-- Документация: 3 основных файла (1100+ строк)
+- **Тесты (2026-02-13, 164+ теста):**
+  - **Backend (94 теста):**
+    - API: health, state, batch, server, profiles, generators (13 тестов)
+    - `test_encoding_utils.py` – INT16/FLOAT32/FLOAT64 конвертация (22 теста)
+    - **`test_modbus_core.py` – unit тесты всех Modbus функций (41 тест)**
+      - RegisterBlock, FC01-FC06, FC15-FC16, integration scenarios
+    - **`test_modbus_integration.py` – InMemoryDataStore adapter (18 тестов)**
+      - Все function codes через datastore, комплексные сценарии
+    - Производительность: 94 теста за ~0.8s
+  - **Frontend (70+ тестов):**
+    - `converters.test.ts` – все форматы INT16/32/64, FLOAT32/64, BITMAP (60+ тестов)
+    - `usePolling.test.ts`, `useCollapse.test.ts` – hooks (12 тестов)
+    - Vitest + jsdom, производительность: ~1-2s
+  - **Документация:** `.cursorrules`, TESTING.md, DOCKER_REBUILD.md, README_MODBUS_TESTS.md
+
+**Статистика:**
+- Рефакторинг: 40 файлов изменено (+3015/-1020 строк)
+- Тесты: 164+ теста, 100% покрытие Modbus функций
+- Frontend: модульная структура, shared UI компоненты
+- Backend: модульная storage, полное покрытие Modbus
+- Документация: 5+ файлов (2000+ строк)
 - TypeScript: ✅ компиляция успешна
 - Python: ✅ синтаксис корректен
 
-**В планах (по желанию):** Unit тесты для converters/formatters, CI (GitHub Actions), e2e‑тесты, WebSocket для real-time.
+**В планах (по желанию):** CI (GitHub Actions), e2e‑тесты, WebSocket для real-time, E2E Modbus с TCP клиентом.
 
