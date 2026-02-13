@@ -779,6 +779,9 @@ body {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.15em;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
 }
 
 .registers-row:nth-child(odd) td {
@@ -802,6 +805,9 @@ body {
   font-size: 0.72rem;
   color: var(--text-soft);
   white-space: nowrap;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
 }
 
 .registers-cell-wide {
