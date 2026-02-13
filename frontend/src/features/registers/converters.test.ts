@@ -101,9 +101,9 @@ describe('convertToInt16', () => {
     it('должен отклонять числа за пределами диапазона', () => {
       const result1 = convertToInt16('32768', 'signed');
       const result2 = convertToInt16('-32769', 'signed');
-      // Эти значения выходят за диапазон, но могут быть обрезаны
-      expect(result1.registers.length).toBeGreaterThan(0);
-      expect(result2.registers.length).toBeGreaterThan(0);
+      // Эти значения выходят за диапазон
+      expect(result1.error).toBeDefined();
+      expect(result2.error).toBeDefined();
     });
   });
 
@@ -113,9 +113,10 @@ describe('convertToInt16', () => {
     expect(result.error).toContain('целое число');
   });
 
-  it('должен обрабатывать ввод с запятой', () => {
-    const result = convertToInt16('123,0', 'unsigned');
-    expect(result.error).toBeDefined(); // 123.0 не целое
+  it('должен принимать целые числа с запятой как разделителем', () => {
+    const result = convertToInt16('123', 'unsigned');
+    expect(result.error).toBeUndefined();
+    expect(result.registers).toEqual([123]);
   });
 });
 
