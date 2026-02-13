@@ -118,6 +118,10 @@ export interface ModbusLogEntry {
   type: string;
   message: string;
   time: string;
+  // Дополнительные поля для событий modbus_write
+  kind?: string;
+  start?: number;
+  count?: number;
 }
 
 export async function fetchModbusLog(since: number): Promise<{ events: ModbusLogEntry[]; next_id: number }> {

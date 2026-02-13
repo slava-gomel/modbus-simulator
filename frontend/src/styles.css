@@ -125,6 +125,10 @@ body {
   grid-column: 1 / -1;
 }
 
+.panel-generators {
+  grid-column: 1 / -1;
+}
+
 .panel-log {
   grid-column: 1 / -1;
 }
