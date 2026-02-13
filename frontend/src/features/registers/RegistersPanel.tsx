@@ -177,52 +177,137 @@ const RegistersPanel: React.FC = () => {
             )}
 
             {selectedKind === "holding" && (
-              <div className="registers-format-toolbar">
-                <div className="field">
-                  <label className="field-label" htmlFor="fmt-kind">
-                    Формат
-                  </label>
-                  <select
-                    id="fmt-kind"
-                    className="field-select"
-                    value={registerFormatKind}
-                    onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                  >
-                    <option value="int16">INT16</option>
-                    <option value="int32">INT32</option>
-                    <option value="int64">INT64</option>
-                    <option value="float32">FLOAT32</option>
-                    <option value="float64">FLOAT64</option>
-                    <option value="bitmap">BITMAP</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="fmt-sign">
-                    Знак
-                  </label>
-                  <select
-                    id="fmt-sign"
-                    className="field-select"
-                    value={registerSign}
-                    onChange={(e) => setRegisterSign(e.target.value as any)}
-                  >
-                    <option value="unsigned">Unsigned</option>
-                    <option value="signed">Signed</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label className="field-label" htmlFor="fmt-order">
-                    Порядок байт
-                  </label>
-                  <select
-                    id="fmt-order"
-                    className="field-select"
-                    value={registerOrder}
-                    onChange={(e) => setRegisterOrder(e.target.value as any)}
-                  >
-                    <option value="ABCD">ABCD</option>
-                    <option value="CDAB">CDAB</option>
-                  </select>
+              <div className="reg-format-wrapper">
+                <div className="reg-format-label">Формат отображения</div>
+                <div className="reg-format-group">
+                  <div className="reg-format-subrow">
+                    <div className="reg-format-subrow-label">FORMAT:</div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-int16"
+                        name="format"
+                        value="int16"
+                        checked={registerFormatKind === "int16"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-int16">INT16</label>
+                    </div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-int32"
+                        name="format"
+                        value="int32"
+                        checked={registerFormatKind === "int32"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-int32">INT32</label>
+                    </div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-int64"
+                        name="format"
+                        value="int64"
+                        checked={registerFormatKind === "int64"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-int64">INT64</label>
+                    </div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-float32"
+                        name="format"
+                        value="float32"
+                        checked={registerFormatKind === "float32"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-float32">FLOAT32</label>
+                    </div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-float64"
+                        name="format"
+                        value="float64"
+                        checked={registerFormatKind === "float64"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-float64">FLOAT64</label>
+                    </div>
+                    <div className="reg-format-option">
+                      <input
+                        type="radio"
+                        id="fmt-bitmap"
+                        name="format"
+                        value="bitmap"
+                        checked={registerFormatKind === "bitmap"}
+                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
+                      />
+                      <label htmlFor="fmt-bitmap">BITMAP</label>
+                    </div>
+                  </div>
+
+                  {registerFormatKind !== "bitmap" && (
+                    <div className="reg-format-subrow">
+                      <div className="reg-format-subrow-label">SIGNEDNESS:</div>
+                      <div className="reg-format-option">
+                        <input
+                          type="radio"
+                          id="sign-unsigned"
+                          name="sign"
+                          value="unsigned"
+                          checked={registerSign === "unsigned"}
+                          onChange={(e) => setRegisterSign(e.target.value as any)}
+                        />
+                        <label htmlFor="sign-unsigned">Unsigned</label>
+                      </div>
+                      <div className="reg-format-option">
+                        <input
+                          type="radio"
+                          id="sign-signed"
+                          name="sign"
+                          value="signed"
+                          checked={registerSign === "signed"}
+                          onChange={(e) => setRegisterSign(e.target.value as any)}
+                        />
+                        <label htmlFor="sign-signed">Signed</label>
+                      </div>
+                    </div>
+                  )}
+
+                  {(registerFormatKind === "int32" || 
+                    registerFormatKind === "int64" || 
+                    registerFormatKind === "float32" || 
+                    registerFormatKind === "float64") && (
+                    <div className="reg-format-subrow">
+                      <div className="reg-format-subrow-label">WORD ORDER:</div>
+                      <div className="reg-format-option">
+                        <input
+                          type="radio"
+                          id="order-abcd"
+                          name="order"
+                          value="ABCD"
+                          checked={registerOrder === "ABCD"}
+                          onChange={(e) => setRegisterOrder(e.target.value as any)}
+                        />
+                        <label htmlFor="order-abcd">ABCD</label>
+                      </div>
+                      <div className="reg-format-option">
+                        <input
+                          type="radio"
+                          id="order-cdab"
+                          name="order"
+                          value="CDAB"
+                          checked={registerOrder === "CDAB"}
+                          onChange={(e) => setRegisterOrder(e.target.value as any)}
+                        />
+                        <label htmlFor="order-cdab">CDAB</label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

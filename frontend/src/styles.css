@@ -815,6 +815,12 @@ body {
   width: 100%;
 }
 
+.registers-cell[colspan="2"] .registers-cell-input,
+.registers-cell[colspan="4"] .registers-cell-input {
+  text-align: center;
+  font-weight: 500;
+}
+
 @keyframes modbusFlash {
   0% {
     box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e, 0 0 30px #22c55e;

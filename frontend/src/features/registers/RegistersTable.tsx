@@ -3,6 +3,7 @@ import { RegisterKind, RegisterFormatKind, RegisterSign, RegisterOrder } from ".
 import RegisterCell from "./RegisterCell";
 import { SignalGeneratorConfig } from "../../api";
 import { DEFAULT_NEON_COLOR } from "../../shared/constants";
+import { getFormatGroupSize } from "./formatters";
 
 interface RegistersTableProps {
   kind: RegisterKind;
@@ -19,7 +20,7 @@ interface RegistersTableProps {
 }
 
 /**
- * Таблица для holding и input регистров
+ * Таблица для holding и input регистров с поддержкой объединения ячеек
  */
 const RegistersTable: React.FC<RegistersTableProps> = ({
   kind,
@@ -36,6 +37,7 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
 }) => {
   const columnsPerRow = 8;
   const isEditable = kind === "holding";
+  const groupSize = getFormatGroupSize(registerFormatKind);
 
   const registerRows: number[][] = useMemo(() => {
     const rows: number[][] = [];
@@ -80,6 +82,12 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
                 {row.map((value, colIndex) => {
                   const globalIndex = rowIndex * columnsPerRow + colIndex;
                   const addr = start + globalIndex;
+                  
+                  // Для многорегистровых форматов пропускаем не-первые ячейки группы
+                  if (groupSize > 1 && colIndex % groupSize !== 0) {
+                    return null;
+                  }
+                  
                   const isChanged = isRecentlyChanged(kind === "holding" ? "holding" : "coils", addr);
                   const generatorHighlight = getGeneratorHighlightForAddress(addr);
                   
@@ -96,6 +104,7 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
                       editText={editHolding[globalIndex]}
                       isRecentlyChanged={isChanged}
                       generatorHighlight={generatorHighlight}
+                      colspan={groupSize}
                       onEdit={(text) => onHoldingEdit(globalIndex, text)}
                       onBlur={(text) => onHoldingBlur(globalIndex, text)}
                     />
