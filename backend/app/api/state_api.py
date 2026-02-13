@@ -79,7 +79,7 @@ def write_single(
 
     storage = _get_storage()
     if storage is not None:
-        storage.save_state(core)
+        storage.state.save_state(core)
 
     # Вернём одно значение как диапазон длиной 1
     if kind == "coils":
@@ -120,7 +120,7 @@ def write_multiple(
 
     storage = _get_storage()
     if storage is not None:
-        storage.save_state(core)
+        storage.state.save_state(core)
 
     # Вернём записанное значение как подтверждение
     read_count = len(values)

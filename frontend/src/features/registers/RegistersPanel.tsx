@@ -1,10 +1,11 @@
 import React from "react";
 import { useRegisters } from "./RegistersContext";
 import { useGenerators } from "../generators";
-import { REGISTER_KINDS } from "../../shared/types";
 import { useCollapse } from "../../shared/hooks";
 import RegistersTable from "./RegistersTable";
 import CoilsTable from "./CoilsTable";
+import RegistersToolbar from "./RegistersToolbar";
+import RegistersFormatSelector from "./RegistersFormatSelector";
 
 const RegistersPanel: React.FC = () => {
   const {
@@ -71,102 +72,19 @@ const RegistersPanel: React.FC = () => {
 
         {!collapsed && (
           <>
-            <div className="registers-toolbar">
-              <div className="field">
-                <label className="field-label" htmlFor="reg-kind">
-                  Тип
-                </label>
-                <select
-                  id="reg-kind"
-                  className="field-select"
-                  value={selectedKind}
-                  onChange={(e) => {
-                    setSelectedKind(e.target.value as any);
-                    void reloadRegisters();
-                  }}
-                >
-                  {REGISTER_KINDS.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="reg-start">
-                  Start
-                </label>
-                <input
-                  id="reg-start"
-                  className="field-input"
-                  type="number"
-                  value={start}
-                  onChange={(e) => {
-                    setStart(Number(e.target.value) || 0);
-                    void reloadRegisters();
-                  }}
-                />
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="reg-count">
-                  Count
-                </label>
-                <input
-                  id="reg-count"
-                  className="field-input"
-                  type="number"
-                  value={count}
-                  onChange={(e) => {
-                    setCount(Number(e.target.value) || 1);
-                    void reloadRegisters();
-                  }}
-                />
-              </div>
-              <div className="btn-group">
-                {(selectedKind === "coils" || selectedKind === "holding") && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => void handleBatchSave()}
-                    >
-                      Сохранить диапазон (batch)
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      data-variant="outline"
-                      onClick={() => {
-                        const zeros = values.map(() => 0);
-                        void handlePresetApply(zeros);
-                      }}
-                    >
-                      Заполнить нулями
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      data-variant="ghost"
-                      onClick={() => {
-                        const rand = values.map(() =>
-                          Math.floor(Math.random() * (selectedKind === "coils" ? 2 : 65536))
-                        );
-                        void handlePresetApply(rand);
-                      }}
-                    >
-                      Случайные значения
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={() => void reloadRegisters()}
-                >
-                  Обновить
-                </button>
-              </div>
-            </div>
+            <RegistersToolbar
+              selectedKind={selectedKind}
+              start={start}
+              count={count}
+              values={values}
+              onKindChange={setSelectedKind}
+              onStartChange={setStart}
+              onCountChange={setCount}
+              onReload={reloadRegisters}
+              onBatchSave={handleBatchSave}
+              onPresetApply={handlePresetApply}
+              showWriteButtons={selectedKind === "coils" || selectedKind === "holding"}
+            />
 
             {stateLoading && <div className="panel-subtitle">Загрузка…</div>}
             {stateError && (
@@ -177,139 +95,14 @@ const RegistersPanel: React.FC = () => {
             )}
 
             {selectedKind === "holding" && (
-              <div className="reg-format-wrapper">
-                <div className="reg-format-label">Формат отображения</div>
-                <div className="reg-format-group">
-                  <div className="reg-format-subrow">
-                    <div className="reg-format-subrow-label">FORMAT:</div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-int16"
-                        name="format"
-                        value="int16"
-                        checked={registerFormatKind === "int16"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-int16">INT16</label>
-                    </div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-int32"
-                        name="format"
-                        value="int32"
-                        checked={registerFormatKind === "int32"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-int32">INT32</label>
-                    </div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-int64"
-                        name="format"
-                        value="int64"
-                        checked={registerFormatKind === "int64"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-int64">INT64</label>
-                    </div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-float32"
-                        name="format"
-                        value="float32"
-                        checked={registerFormatKind === "float32"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-float32">FLOAT32</label>
-                    </div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-float64"
-                        name="format"
-                        value="float64"
-                        checked={registerFormatKind === "float64"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-float64">FLOAT64</label>
-                    </div>
-                    <div className="reg-format-option">
-                      <input
-                        type="radio"
-                        id="fmt-bitmap"
-                        name="format"
-                        value="bitmap"
-                        checked={registerFormatKind === "bitmap"}
-                        onChange={(e) => setRegisterFormatKind(e.target.value as any)}
-                      />
-                      <label htmlFor="fmt-bitmap">BITMAP</label>
-                    </div>
-                  </div>
-
-                  {registerFormatKind !== "bitmap" && (
-                    <div className="reg-format-subrow">
-                      <div className="reg-format-subrow-label">SIGNEDNESS:</div>
-                      <div className="reg-format-option">
-                        <input
-                          type="radio"
-                          id="sign-unsigned"
-                          name="sign"
-                          value="unsigned"
-                          checked={registerSign === "unsigned"}
-                          onChange={(e) => setRegisterSign(e.target.value as any)}
-                        />
-                        <label htmlFor="sign-unsigned">Unsigned</label>
-                      </div>
-                      <div className="reg-format-option">
-                        <input
-                          type="radio"
-                          id="sign-signed"
-                          name="sign"
-                          value="signed"
-                          checked={registerSign === "signed"}
-                          onChange={(e) => setRegisterSign(e.target.value as any)}
-                        />
-                        <label htmlFor="sign-signed">Signed</label>
-                      </div>
-                    </div>
-                  )}
-
-                  {(registerFormatKind === "int32" || 
-                    registerFormatKind === "int64" || 
-                    registerFormatKind === "float32" || 
-                    registerFormatKind === "float64") && (
-                    <div className="reg-format-subrow">
-                      <div className="reg-format-subrow-label">WORD ORDER:</div>
-                      <div className="reg-format-option">
-                        <input
-                          type="radio"
-                          id="order-abcd"
-                          name="order"
-                          value="ABCD"
-                          checked={registerOrder === "ABCD"}
-                          onChange={(e) => setRegisterOrder(e.target.value as any)}
-                        />
-                        <label htmlFor="order-abcd">ABCD</label>
-                      </div>
-                      <div className="reg-format-option">
-                        <input
-                          type="radio"
-                          id="order-cdab"
-                          name="order"
-                          value="CDAB"
-                          checked={registerOrder === "CDAB"}
-                          onChange={(e) => setRegisterOrder(e.target.value as any)}
-                        />
-                        <label htmlFor="order-cdab">CDAB</label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <RegistersFormatSelector
+                format={registerFormatKind}
+                sign={registerSign}
+                order={registerOrder}
+                onFormatChange={setRegisterFormatKind}
+                onSignChange={setRegisterSign}
+                onOrderChange={setRegisterOrder}
+              />
             )}
 
             {selectedKind === "coils" || selectedKind === "discrete_inputs" ? (

@@ -2,63 +2,206 @@
 
 Симулятор Modbus TCP slave с WEB-интерфейсом для конфигурирования и наблюдения за регистрами.
 
-### Возможности
+## Содержание
 
-- **Backend (FastAPI + pymodbus):** Modbus TCP slave (функции 01–06, 15/16), запуск/остановка сервера через API, хранение конфигурации и состояния в файлах.
-- **WEB GUI (React + TypeScript):** конфигурация Modbus, просмотр и редактирование регистров (coils, discrete inputs, holding, input), выбор формата отображения (INT16/32/64, FLOAT32/64, BITMAP) для holding/input, пакетная запись и пресеты («Заполнить нулями», «Случайные значения»), управление сервером (статус, Запустить/Остановить), профили (сохранение и загрузка конфигурации и состояния), журнал событий Modbus.
-- **Генератор сигналов:** фоновое обновление holding‑регистров по заданному сигналу (синус, пила, меандр, константа) в форматах INT16 / FLOAT32 / FLOAT64. Настройка выполняется в панели «Генератор сигналов» под таблицей регистров: выбирается тип сигнала, амплитуда, частота, смещение, формат данных и начальный адрес. Несколько генераторов могут работать параллельно.
-- **Docker Compose:** сервисы `backend` и `frontend`, volume для данных.
+- [Возможности](#возможности)
+- [Быстрый старт](#быстрый-старт)
+- [Документация](#документация)
+- [Разработка](#разработка)
+- [Тестирование](#тестирование)
 
-### Запуск
+## Возможности
 
-**Docker Compose (рекомендуется):**
+### Backend (FastAPI + pymodbus)
+- Modbus TCP slave (функции 01–06, 15/16)
+- Запуск/остановка сервера через API
+- Хранение конфигурации и состояния в файлах
+- Модульная архитектура storage
+
+### WEB GUI (React + TypeScript)
+- Конфигурация Modbus параметров
+- Просмотр и редактирование регистров (coils, discrete inputs, holding, input)
+- Форматы отображения: INT16/32/64, FLOAT32/64, BITMAP
+- Пакетная запись и пресеты
+- Управление профилями конфигураций
+- Журнал событий Modbus
+- Feature-based архитектура с React Context API
+
+### Генератор сигналов
+- Фоновое обновление holding‑регистров
+- Типы сигналов: синус, пила, меандр, константа
+- Форматы: INT16, FLOAT32, FLOAT64
+- Настраиваемые параметры: амплитуда, частота, смещение
+- Параллельная работа нескольких генераторов
+
+### Профили
+- Сохранение конфигурации и состояния под именем
+- Комментарии к профилям
+- Привязка генераторов сигналов к профилям
+- Загрузка и удаление профилей
+- Хранение в YAML файлах
+
+## Быстрый старт
+
+### Docker Compose (рекомендуется)
 
 ```bash
 docker compose up --build
 ```
 
-- **Backend:** API `http://localhost:8000/api/...`, health `http://localhost:8000/health`, Modbus TCP `localhost:1502`
-- **WEB GUI:** `http://localhost:8080`
+**Доступ:**
+- Backend API: `http://localhost:8000/api`
+- API Docs: `http://localhost:8000/docs`
+- WEB GUI: `http://localhost:3000`
+- Modbus TCP: `localhost:502`
 
-**Локальная разработка:**
+### Локальная разработка
 
+**Backend:**
 ```bash
-# Backend
-cd backend && pip install -e .[dev] && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Frontend (в другом терминале)
-cd frontend && npm install && npm run dev
+cd backend
+pip install -e .[dev]
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Фронтенд: `http://localhost:5173`, прокси `/api` → `http://localhost:8000`.
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-### Профили
+Frontend: `http://localhost:5173`, API прокси `/api` → `http://localhost:8000`
 
-В GUI раздел «Профили»: сохранение текущей конфигурации и состояния регистров под именем (и комментарием), загрузка и удаление профилей. Файлы хранятся в volume в каталоге `profiles/` (YAML).
+## Документация
 
-Конфигурации генераторов сигналов привязаны к профилям и сохраняются в тех же YAML‑файлах (поле `generators`). Это позволяет воспроизводить набор устройств/регистров и их эмуляцию одним кликом.
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Архитектура проекта, структура модулей, data flow
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** — Руководство для разработчиков, code style, git workflow
+- **[docs/API.md](./docs/API.md)** — Полная REST API документация
 
-### Пресеты регистров
+### Структура проекта
 
-Для coils и holding регистров: кнопки «Заполнить нулями» и «Случайные значения» — заполняют выбранный диапазон и записывают его одним batch-запросом.
+```
+modbud_simulator/
+├── frontend/               # React + TypeScript
+│   ├── src/
+│   │   ├── api/           # Модульные API клиенты
+│   │   ├── features/      # Feature-based modules
+│   │   ├── shared/        # Переиспользуемые компоненты
+│   │   └── App.tsx
+│   └── Dockerfile
+├── backend/               # FastAPI + Python
+│   ├── app/
+│   │   ├── api/          # API endpoints
+│   │   ├── storage/      # Модульное хранилище
+│   │   ├── modbus_core.py
+│   │   └── main.py
+│   └── Dockerfile
+├── docs/                  # Документация
+│   └── API.md
+├── ARCHITECTURE.md        # Архитектура системы
+├── CONTRIBUTING.md        # Руководство разработчика
+└── docker-compose.yml
+```
 
-### Авторизация (опционально)
+## Разработка
 
-Если заданы переменные окружения `GUI_USER` и `GUI_PASSWORD`, доступ к API и WEB GUI защищён Basic Auth. В GUI отображается форма входа. Без этих переменных авторизация не требуется.
+### Frontend
 
-Пример для docker-compose:
+**Технологии:**
+- React 18 + TypeScript
+- Vite для dev сервера и сборки
+- Axios для API запросов
+- React Context API для state management
+
+**Архитектура:**
+- Feature-based структура (`features/`)
+- Shared UI компоненты (`shared/components/`)
+- Custom hooks (`usePolling`, `useApiCall`)
+- Модульная API (`api/registers.ts`, `api/generators.ts`, и т.д.)
+
+### Backend
+
+**Технологии:**
+- FastAPI
+- Pymodbus для Modbus TCP
+- YAML/JSON для storage
+- Threading для генераторов сигналов
+
+**Архитектура:**
+- Модульная storage система (`storage/config.py`, `storage/state.py`, `storage/profiles.py`)
+- Dependency injection через init функции
+- Type hints (PEP 484)
+- Structured logging
+
+### Code Style
+
+**Frontend:**
+- TypeScript strict mode
+- React.FC для компонентов
+- Именование: PascalCase (компоненты), camelCase (функции/переменные)
+
+**Backend:**
+- PEP 8 style guide
+- Type hints для всех функций
+- Google-style docstrings
+
+См. [CONTRIBUTING.md](./CONTRIBUTING.md) для деталей.
+
+## Тестирование
+
+### Backend
+
+```bash
+cd backend
+pytest tests/ -v
+pytest --cov=app  # С покрытием кода
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm test
+npm test -- --coverage
+```
+
+## Авторизация (опционально)
+
+Защита доступа через HTTP Basic Auth:
 
 ```yaml
+# docker-compose.yml
 environment:
-  - GUI_USER=admin
-  - GUI_PASSWORD=secret
+  - MB_AUTH_USER=admin
+  - MB_AUTH_PASS=secret
 ```
 
-### Тесты
+Без этих переменных авторизация не требуется.
 
-```bash
-cd backend && python3 -m pytest tests/ -v
-```
+## Производство
 
-Перед запуском тестов нужна установка: `pip install -e .[dev]`. Для тестов используется временный каталог данных (см. `tests/conftest.py`).
+**Рекомендации для production:**
+
+1. Настройте CORS whitelist в `backend/app/main.py`
+2. Используйте переменные окружения для конфигурации
+3. Настройте volume для `/app/data` для persistence
+4. Добавьте nginx reverse proxy для rate limiting
+5. Включите HTTPS
+
+См. [ARCHITECTURE.md](./ARCHITECTURE.md#deployment) для деталей.
+
+## Лицензия
+
+MIT
+
+## Contributing
+
+Contributions welcome! См. [CONTRIBUTING.md](./CONTRIBUTING.md) для начала работы.
+
+## Поддержка
+
+- Issues: GitHub Issues
+- Документация: См. `/docs` и `ARCHITECTURE.md`
+
 

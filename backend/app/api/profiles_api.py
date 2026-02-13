@@ -54,7 +54,7 @@ class ProfileUpdateRequest(BaseModel):
 @router.get("", response_model=list)
 def list_profiles() -> list:
     storage, _, _, _ = _get_deps()
-    return storage.list_profiles()
+    return storage.profiles.list_profiles()
 
 
 @router.post("", response_model=dict)
@@ -64,7 +64,7 @@ def save_profile(body: ProfileSaveRequest) -> dict:
     generators_data: list[dict] = []
     if engine is not None:
         generators_data = [g.model_dump() for g in engine.get_generators()]
-    slug = storage.save_profile(body.name, core, body.comment, generators=generators_data)
+    slug = storage.profiles.save_profile(body.name, core, body.comment, generators=generators_data)
     return {"slug": slug, "name": body.name.strip() or slug}
 
 
@@ -83,7 +83,7 @@ def update_profile(slug: str, body: ProfileUpdateRequest | None = None) -> dict:
         generators_data = [g.model_dump() for g in engine.get_generators()]
     comment = body.comment if body is not None else None
     try:
-        storage.update_profile(slug, core, comment=comment, generators=generators_data)
+        storage.profiles.update_profile(slug, core, comment=comment, generators=generators_data)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return {"slug": slug, "updated": True}
@@ -95,7 +95,7 @@ def delete_profile(slug: str) -> None:
     if slug == "default":
         raise HTTPException(status_code=400, detail="Default profile cannot be deleted")
     try:
-        storage.delete_profile(slug)
+        storage.profiles.delete_profile(slug)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -104,7 +104,7 @@ def delete_profile(slug: str) -> None:
 def load_profile(slug: str) -> dict:
     storage, config, core, engine = _get_deps()
     try:
-        data = storage.load_profile(slug)
+        data = storage.profiles.load_profile(slug)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     cfg = data.get("config")
@@ -112,10 +112,10 @@ def load_profile(slug: str) -> dict:
     generators_raw = data.get("generators") or []
     if cfg:
         config.modbus = ModbusConfigDTO(**cfg).to_config()
-        storage.save_config()
+        storage.config.save_config()
     if state and isinstance(state, dict):
-        storage._apply_state(core, state)
-        storage.save_state(core)
+        storage.state._apply_state(core, state)
+        storage.state.save_state(core)
     # Восстанавливаем генераторы, если есть движок и конфигурация в профиле
     if engine is not None and isinstance(generators_raw, list):
         try:

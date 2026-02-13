@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { AppLogEntry, LogFilterKey } from "../../shared/types";
-import { LOG_COLORS } from "../../shared/constants";
 import { useCollapse } from "../../shared/hooks";
 import { useLogsContext } from "./LogsContext";
+import LogFilters from "./LogFilters";
+import LogEntry from "./LogEntry";
 
 const LogView: React.FC = () => {
   const { eventLog, clearLog } = useLogsContext();
@@ -15,6 +16,10 @@ const LogView: React.FC = () => {
     setActiveFilters((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
+  };
+
+  const clearFilters = () => {
+    setActiveFilters([]);
   };
 
   const hasFilter = (key: LogFilterKey): boolean => activeFilters.includes(key);
@@ -126,100 +131,17 @@ const LogView: React.FC = () => {
           </div>
           <div className="panel-toolbar">
             {!collapsed && (
-              <>
-                <div className="btn-group" style={{ marginRight: "0.5rem" }}>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={activeFilters.length === 0 ? "primary" : "ghost"}
-                    onClick={() => setActiveFilters([])}
-                  >
-                    Все
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={hasFilter("modbus") ? "primary" : "ghost"}
-                    onClick={() => toggleFilter("modbus")}
-                  >
-                    Modbus
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={hasFilter("server") ? "primary" : "ghost"}
-                    onClick={() => toggleFilter("server")}
-                  >
-                    Сервер
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={hasFilter("generators") ? "primary" : "ghost"}
-                    onClick={() => toggleFilter("generators")}
-                  >
-                    Генераторы
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={hasFilter("profiles") ? "primary" : "ghost"}
-                    onClick={() => toggleFilter("profiles")}
-                  >
-                    Профили
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
-                    data-variant={hasFilter("errors") ? "primary" : "ghost"}
-                    onClick={() => toggleFilter("errors")}
-                  >
-                    Ошибки
-                  </button>
-                </div>
-                <div className="input-row" style={{ marginRight: "0.5rem" }}>
-                  <div className="field" style={{ minWidth: 120 }}>
-                    <label className="field-label" htmlFor="log-ip-filter">
-                      IP
-                    </label>
-                    <input
-                      id="log-ip-filter"
-                      className="field-input"
-                      type="text"
-                      placeholder="192.168.0."
-                      value={ipFilter}
-                      onChange={(e) => setIpFilter(e.target.value)}
-                    />
-                  </div>
-                  <div className="field" style={{ minWidth: 160 }}>
-                    <label className="field-label" htmlFor="log-search">
-                      Поиск
-                    </label>
-                    <input
-                      id="log-search"
-                      className="field-input"
-                      type="text"
-                      placeholder="FC16, addr=0, error…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={handleExport}
-                >
-                  Экспорт JSON
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-icon"
-                  onClick={clearLog}
-                >
-                  Очистить
-                </button>
-              </>
+              <LogFilters
+                activeFilters={activeFilters}
+                ipFilter={ipFilter}
+                searchText={search}
+                onFilterToggle={toggleFilter}
+                onClearFilters={clearFilters}
+                onIpFilterChange={setIpFilter}
+                onSearchChange={setSearch}
+                onClear={clearLog}
+                onExport={handleExport}
+              />
             )}
             <button
               type="button"
@@ -236,25 +158,9 @@ const LogView: React.FC = () => {
             {filtered.length === 0 ? (
               <div className="log-empty">Нет записей журнала</div>
             ) : (
-              [...filtered].reverse().map((entry, i) => {
-                const d = new Date(entry.time);
-                const base = d.toLocaleTimeString("ru-RU", { hour12: false });
-                const ms = String(d.getMilliseconds()).padStart(3, "0");
-                const timeText = `${base}.${ms}`;
-                return (
-                  <div
-                    key={i}
-                    className="log-line"
-                    style={{ color: LOG_COLORS[entry.type] ?? "#e5e7eb" }}
-                  >
-                    <div className="log-time">{timeText}</div>
-                    <div className="log-message">
-                      <span className="badge-log-type">{entry.type}</span>
-                      {entry.message}
-                    </div>
-                  </div>
-                );
-              })
+              [...filtered].reverse().map((entry, i) => (
+                <LogEntry key={i} entry={entry} />
+              ))
             )}
           </div>
         )}

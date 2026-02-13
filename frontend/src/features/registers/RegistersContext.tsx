@@ -5,6 +5,7 @@ import { useLogsContext } from "../logs";
 import { usePolling } from "../../shared/hooks";
 import { REGISTERS_AUTO_REFRESH_MS, REGISTER_FLASH_DURATION_MS } from "../../shared/constants";
 import { makeRegisterKey, getFormatGroupSize } from "./formatters";
+import { convertStringToRegisters, isEmptyInput } from "./converters";
 
 interface RegistersContextValue {
   selectedKind: RegisterKind;
@@ -170,9 +171,6 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
     
     setEditHolding((prev) => ({ ...prev, [globalIndex]: text }));
 
-    const trimmed = (text ?? "").trim();
-    const normalized = trimmed.replace(",", ".");
-
     const groupSize = getFormatGroupSize(registerFormatKind);
 
     const rowIndex = Math.floor(globalIndex / columnsPerRow);
@@ -206,18 +204,8 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     };
 
-    // Пустое или "сырая" строка → пишем 0
-    if (
-      !trimmed ||
-      trimmed === "-" ||
-      trimmed === "+" ||
-      trimmed === "." ||
-      trimmed === "," ||
-      trimmed === "-." ||
-      trimmed === "+." ||
-      trimmed === "-," ||
-      trimmed === "+,"
-    ) {
+    // Пустое или недопустимое значение → пишем 0
+    if (isEmptyInput(text)) {
       await applyZero();
       return;
     }
@@ -225,166 +213,40 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       setStateError(null);
 
-      // BITMAP
-      if (registerFormatKind === "bitmap") {
-        let value: number;
-        if (/^[01]{1,16}$/.test(trimmed)) {
-          value = parseInt(trimmed, 2);
-        } else {
-          const n = Number(normalized);
-          if (!Number.isInteger(n)) throw new Error("BITMAP: ожидается целое число или 16‑битная маска");
-          value = n;
-        }
-        if (value < 0 || value > 0xffff) throw new Error("BITMAP: значение должно быть в диапазоне 0..65535");
-        const resp = await writeSingle("holding", baseAddr, value);
+      // Конвертация через converters.ts
+      const result = convertStringToRegisters(text, registerFormatKind, registerSign, registerOrder);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      const regs = result.registers;
+
+      // Проверка размера группы
+      if (groupSize > 1 && regs.length < groupSize) {
+        throw new Error(`Недостаточно регистров для ${registerFormatKind}`);
+      }
+
+      // Запись в Modbus
+      if (groupSize === 1) {
+        const resp = await writeSingle("holding", baseAddr, regs[0]);
         const updated = [...values];
         updated[groupBaseIndex] = resp.values[0];
         setValues(updated);
-        setEditHolding((prev) => {
-          const next = { ...prev };
-          delete next[globalIndex];
-          return next;
-        });
-        return;
-      }
-
-      // INT16
-      if (registerFormatKind === "int16") {
-        const n = Number(normalized);
-        if (!Number.isInteger(n)) throw new Error("INT16: ожидается целое число");
-        let value = n;
-        if (registerSign === "unsigned") {
-          if (value < 0 || value > 0xffff) throw new Error("INT16 unsigned: 0..65535");
-        } else {
-          if (value < -32768 || value > 32767) throw new Error("INT16 signed: -32768..32767");
-          if (value < 0) value = 0x10000 + value;
-        }
-        const resp = await writeSingle("holding", baseAddr, value);
-        const updated = [...values];
-        updated[groupBaseIndex] = resp.values[0];
-        setValues(updated);
-        setEditHolding((prev) => {
-          const next = { ...prev };
-          delete next[globalIndex];
-          return next;
-        });
-        return;
-      }
-
-      // INT32 / FLOAT32
-      if (groupSize === 2 && (registerFormatKind === "int32" || registerFormatKind === "float32")) {
-        const slice = values.slice(groupBaseIndex, groupBaseIndex + 2);
-        if (slice.length < 2) throw new Error("Недостаточно регистров для 32‑битного значения");
-
-        let regs: number[] = [];
-        if (registerFormatKind === "int32") {
-          const n = Number(normalized);
-          if (!Number.isInteger(n)) throw new Error("INT32: ожидается целое число");
-          let bigint = BigInt(n);
-          if (registerSign === "unsigned") {
-            if (bigint < 0n || bigint > 0xffffffffn) throw new Error("INT32 unsigned: 0..2^32-1");
-          } else {
-            const min = -(1n << 31n);
-            const max = (1n << 31n) - 1n;
-            if (bigint < min || bigint > max) throw new Error("INT32 signed: -2^31..2^31-1");
-            if (bigint < 0n) bigint = (1n << 32n) + bigint;
-          }
-          const u32 = Number(bigint & 0xffffffffn);
-          let w0 = (u32 >>> 16) & 0xffff;
-          let w1 = u32 & 0xffff;
-          if (registerOrder === "CDAB") {
-            [w0, w1] = [w1, w0];
-          }
-          regs = [w0, w1];
-        } else {
-          const f = Number(normalized);
-          if (!Number.isFinite(f)) throw new Error("FLOAT32: ожидается число");
-          const buf = new ArrayBuffer(4);
-          const view = new DataView(buf);
-          view.setFloat32(0, f);
-          const u32 = view.getUint32(0);
-          let w0 = (u32 >>> 16) & 0xffff;
-          let w1 = u32 & 0xffff;
-          if (registerOrder === "CDAB") {
-            [w0, w1] = [w1, w0];
-          }
-          regs = [w0, w1];
-        }
-
+      } else {
         await writeBatch("holding", baseAddr, regs);
         const updated = [...values];
         for (let i = 0; i < regs.length; i += 1) {
           if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
         }
         setValues(updated);
-        setEditHolding((prev) => {
-          const next = { ...prev };
-          delete next[globalIndex];
-          return next;
-        });
-        return;
       }
 
-      // INT64 / FLOAT64
-      if (groupSize === 4 && (registerFormatKind === "int64" || registerFormatKind === "float64")) {
-        const slice = values.slice(groupBaseIndex, groupBaseIndex + 4);
-        if (slice.length < 4) throw new Error("Недостаточно регистров для 64‑битного значения");
-
-        let regs: number[] = [];
-        if (registerFormatKind === "int64") {
-          let bigint: bigint;
-          try {
-            bigint = BigInt(normalized);
-          } catch {
-            throw new Error("INT64: ожидается целое число");
-          }
-          if (registerSign === "unsigned") {
-            if (bigint < 0n || bigint > (1n << 64n) - 1n)
-              throw new Error("INT64 unsigned: 0..2^64-1");
-          } else {
-            const min = -(1n << 63n);
-            const max = (1n << 63n) - 1n;
-            if (bigint < min || bigint > max) throw new Error("INT64 signed: -2^63..2^63-1");
-            if (bigint < 0n) bigint = (1n << 64n) + bigint;
-          }
-          const words: number[] = [];
-          let tmp = bigint;
-          for (let i = 0; i < 4; i += 1) {
-            words.unshift(Number(tmp & 0xffffn));
-            tmp >>= 16n;
-          }
-          regs = [...words];
-          if (registerOrder === "CDAB") {
-            regs = [regs[2], regs[3], regs[0], regs[1]];
-          }
-        } else {
-          const f = Number(normalized);
-          if (!Number.isFinite(f)) throw new Error("FLOAT64: ожидается число");
-          const buf = new ArrayBuffer(8);
-          const view = new DataView(buf);
-          view.setFloat64(0, f);
-          const words: number[] = [];
-          for (let i = 0; i < 4; i += 1) {
-            words.push(view.getUint16(i * 2));
-          }
-          regs = [...words];
-          if (registerOrder === "CDAB") {
-            regs = [regs[2], regs[3], regs[0], regs[1]];
-          }
-        }
-
-        await writeBatch("holding", baseAddr, regs);
-        const updated = [...values];
-        for (let i = 0; i < regs.length; i += 1) {
-          if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
-        }
-        setValues(updated);
-        setEditHolding((prev) => {
-          const next = { ...prev };
-          delete next[globalIndex];
-          return next;
-        });
-      }
+      setEditHolding((prev) => {
+        const next = { ...prev };
+        delete next[globalIndex];
+        return next;
+      });
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Не удалось интерпретировать значение для выбранного формата";

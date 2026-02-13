@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 config = get_default_config()
 storage = Storage(config)
-storage.load_config()
+storage.config.load_config()
 
 core = ModbusSimulatorCore(
     coils_size=config.modbus.coils_size,
@@ -33,7 +33,7 @@ core = ModbusSimulatorCore(
     holding_registers_size=config.modbus.holding_registers_size,
     input_registers_size=config.modbus.input_registers_size,
 )
-storage.load_state(core)
+storage.state.load_state(core)
 
 signal_generators_engine = SignalGeneratorEngine(core)
 
@@ -147,7 +147,7 @@ app.add_middleware(
 # Инициализируем API и гарантируем наличие профиля по умолчанию
 state_api.init_state_api(core, storage)
 # Создаём профиль 'default', если он ещё не существует.
-storage.ensure_default_profile(core)
+storage.profiles.ensure_default_profile(core)
 profiles_api.init_profiles_api(storage, config, core, signal_generators_engine)
 generators_api.init_generators_api(storage, signal_generators_engine)
 app.include_router(config_api.router, prefix="/api")
