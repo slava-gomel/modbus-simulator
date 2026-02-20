@@ -112,59 +112,14 @@ body {
 }
 
 .layout-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 340px) minmax(0, 1.5fr) minmax(0, 1.2fr);
+  display: flex;
+  flex-direction: column;
   gap: 1.2rem;
-}
-
-.panel-settings {
-  grid-column: 1 / -1;
-}
-
-.panel-registers {
-  grid-column: 1 / -1;
-}
-
-.panel-generators {
-  grid-column: 1 / -1;
-}
-
-.panel-log {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 1180px) {
-  .layout-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-    grid-template-rows: auto auto;
-    grid-template-areas:
-      "sidebar registers"
-      "log log";
-  }
-
-  .panel-server,
-  .panel-config,
-  .panel-profiles {
-    grid-area: sidebar;
-  }
-
-  .panel-registers {
-    grid-area: registers;
-  }
-
-  .panel-log {
-    grid-area: log;
-  }
 }
 
 @media (max-width: 880px) {
   .app-root {
     padding-inline: 1rem;
-  }
-
-  .layout-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: none;
   }
 }
 
