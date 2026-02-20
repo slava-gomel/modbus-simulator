@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 
 export interface ShortcutsHelpProps {
   open: boolean;
@@ -15,7 +16,7 @@ const SHORTCUTS = [
 export const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ open, onClose }) => {
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="confirm-overlay" onClick={onClose}>
       <div className="confirm-dialog" onClick={(e) => e.stopPropagation()} style={{ minWidth: 380 }}>
         <div className="confirm-title">Горячие клавиши</div>
@@ -50,7 +51,8 @@ export const ShortcutsHelp: React.FC<ShortcutsHelpProps> = ({ open, onClose }) =
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

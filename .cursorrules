@@ -68,7 +68,7 @@
 - **Переиспользуемые классы:** `panel`, `field-*`, `btn`, `registers-table*`, `log-*`, `generator-value-display`
 - **GUI v4 стили (2026-02-20):**
   - `.toggle-switch` / `.toggle-switch--on` / `.toggle-switch--disabled` – ToggleSwitch
-  - `.confirm-overlay` / `.confirm-dialog` – ConfirmDialog с backdrop-blur
+  - `.confirm-overlay` / `.confirm-dialog` – ConfirmDialog с backdrop-blur (**рендер через createPortal в body — обязательно!**)
   - `.skeleton-block` / `.skeleton-table` – shimmer анимация загрузки
   - `.status-dot-sm` / `.status-dot-sm--running` – пульсирующая точка статуса в AppHeader
   - `.app-header-status` / `.app-profile-badge` – статус и профиль в шапке

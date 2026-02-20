@@ -15,9 +15,9 @@
 
 2. **Новые shared-компоненты:**
    - `ToggleSwitch` — переключатель on/off для генераторов
-   - `ConfirmDialog` — модальный диалог подтверждения (backdrop-blur, Escape для закрытия)
+   - `ConfirmDialog` — модальный диалог подтверждения (backdrop-blur, Escape, **createPortal в body**)
    - `Skeleton` — анимированные плейсхолдеры при загрузке (text/rect/table варианты)
-   - `ShortcutsHelp` — модальная шпаргалка горячих клавиш
+   - `ShortcutsHelp` — модальная шпаргалка горячих клавиш (**createPortal в body**)
 
 3. **AppHeader:** глобальный статус сервера (зелёная пульсирующая/оранжевая точка + адрес) и badge текущего профиля.
 

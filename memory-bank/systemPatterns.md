@@ -63,6 +63,7 @@
   - Заменяет `window.confirm` для удаления профилей и генераторов
   - Поддержка варианта `danger` (красная кнопка)
   - Закрытие по Escape и клику по overlay
+  - **Рендер через `createPortal(dialog, document.body)`** — обязательно, иначе stacking context родительских панелей (box-shadow, border-radius и т.д.) перекрывает overlay. То же для `ShortcutsHelp`.
 
 - **AppHeader со статусом (v4):**
   - Пульсирующая точка: зелёная (запущен) / оранжевая (остановлен) + адрес сервера
