@@ -59,27 +59,26 @@
 
 - Авторизация: опциональная Basic Auth по env.
 
-- **Тесты (2026-02-13, 164+ теста):**
-  - **Backend (94 теста):**
-    - API: health, state, batch, server, profiles, generators (13 тестов)
-    - `test_encoding_utils.py` – INT16/FLOAT32/FLOAT64 конвертация (22 теста)
-    - **`test_modbus_core.py` – unit тесты всех Modbus функций (41 тест)**
-      - RegisterBlock, FC01-FC06, FC15-FC16, integration scenarios
-    - **`test_modbus_integration.py` – InMemoryDataStore adapter (18 тестов)**
-      - Все function codes через datastore, комплексные сценарии
-    - Производительность: 94 теста за ~0.8s
-  - **Frontend (70+ тестов):**
-    - `converters.test.ts` – все форматы INT16/32/64, FLOAT32/64, BITMAP (60+ тестов)
-    - `usePolling.test.ts`, `useCollapse.test.ts` – hooks (12 тестов)
-    - Vitest + jsdom, производительность: ~1-2s
-  - **Документация:** `.cursorrules`, TESTING.md, DOCKER_REBUILD.md, README_MODBUS_TESTS.md
+- **Тесты (2026-02-20, 157 тестов, все проходят):**
+  - **Backend (102 теста):**
+    - API: health, state, batch, server, profiles, generators
+    - `test_encoding_utils.py` – INT16/FLOAT32/FLOAT64 (22 теста)
+    - **`test_modbus_core.py`** – Modbus FC01–FC06/FC15–FC16 (41 тест)
+    - **`test_modbus_integration.py`** – InMemoryDataStore (18 тестов)
+    - `test_websocket.py` – каналы и broadcast
+    - ~1.5s на все backend-тесты
+  - **Frontend (55 тестов):**
+    - `converters.test.ts` – форматы INT16/32/64, FLOAT32/64, BITMAP (44 теста)
+    - `useCollapse.test.ts` – 5 тестов
+    - `WebSocketContext.test.tsx` – 6 тестов (подписка, сообщения, отписка, abnormal close → disconnected, несколько каналов)
+    - Vitest + jsdom, ~1.5s
+  - **Исправление падающих тестов (2026-02-20):** WebSocketContext — тест переподключения упрощён до проверки «disconnected» при аварийном закрытии (code 1006); тест «multiple channels» — vi.useRealTimers() и timeout для стабильности.
 
 **Статистика:**
-- Рефакторинг v2: 40 файлов изменено (+3015/-1020 строк)
-- **WebSocket v3: 20+ файлов добавлено/изменено (+2000 строк)**
-- Тесты: 170+ тестов (backend 99, frontend 76)
-  - WebSocket: backend 6 тестов, frontend 7 тестов
-  - 100% покрытие Modbus функций
+- Рефакторинг v2: модульная структура backend/frontend
+- WebSocket v3: real-time, раздельные каналы
+- Тесты: 157 (backend 102, frontend 55), 100% проходят
+  - 100% покрытие реализованных Modbus функций
 - Frontend: модульная структура, shared UI компоненты, **WebSocket real-time**
 - Backend: модульная storage, полное покрытие Modbus, **WebSocket broadcast**
 - Документация: 7+ файлов (3500+ строк), включая WEBSOCKET.md

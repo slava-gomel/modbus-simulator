@@ -1,12 +1,13 @@
 ## Active Context
 
-**Текущий фокус (2026‑02‑13):**
+**Текущий фокус (2026‑02‑20):**
 - ✅ Завершён комплексный рефакторинг всего проекта (frontend + backend + документация).
 - ✅ Frontend: модульная API, shared UI компоненты, разделённые панели.
 - ✅ Backend: модульная storage система с разделением ответственности.
 - ✅ Документация: ARCHITECTURE.md, CONTRIBUTING.md, docs/API.md.
-- ✅ **Тесты: полное покрытие всех Modbus функций (164+ теста).**
+- ✅ **Тесты: backend 102, frontend 55 — все проходят.** Полное покрытие Modbus FC01–FC06/FC15–FC16.
 - ✅ **WebSocket:** real-time обновления (registers, server, generators); polling удалён.
+- ✅ **Исправлены падающие WebSocket-тесты (2026-02-20):** в WebSocketContext.test.tsx — тест переподключения упрощён («should set disconnected and schedule reconnection on abnormal close»); тест «should support multiple channels» — vi.useRealTimers() и timeout 2000 для стабильности.
 - ✅ **Исправлена лавина запросов:** в App.tsx начальная загрузка (loadConfig, refreshProfiles, loadGenerators) выполняется один раз при `authenticated === true`; колбэки не в deps эффекта, иначе при setCurrentProfileSlug в refreshProfiles эффект уходил в бесконечный цикл (1450+ запросов, Stalled, таблица регистров не загружалась).
 
 **Реализовано:**
@@ -70,13 +71,13 @@
     - CoilsTable – битовая таблица для coils/discrete_inputs
     - RegisterCell – ячейка с редактированием, подсветкой и форматированием
     - Поддержка всех форматов: INT16/32/64, FLOAT32/64, BITMAP
-    - Редактирование holding-регистров с валидацией на blur
+    - Редактирование holding и input‑регистров с валидацией на blur (UI и REST API поддерживают запись в обе области; Modbus клиент по‑прежнему читает input через FC04)
     - Зелёная вспышка при Modbus-записях (применяется к input внутри ячейки)
     - Неоновая подсветка регистров, затронутых генераторами
 
   - **Генераторы (полный функционал восстановлен):**
     - GeneratorForm – полная форма создания/редактирования с валидацией
-    - GeneratorsList – таблица с колонками: Имя, Тип, Формат, Адрес, График, Значение, Период, Статус, Действия
+    - GeneratorsList – таблица с колонками: Имя, Тип сигнала, Формат, Область (Holding/Input), Адрес, График, Значение, Период, Статус, Действия
     - WaveChart – SVG-компонент для живых графиков сигналов
     - utils.ts – форматирование, построение графиков, неоновая подсветка
     - Живые значения с неоновой подсветкой в таблице
@@ -127,20 +128,18 @@
     - Ссылки на ARCHITECTURE, CONTRIBUTING, API docs
     - Улучшенные примеры использования
 
-- **Тесты (2026-02-13, завершено):**
-  - Backend: 94 теста (API, encoding_utils, **Modbus FC01-FC06/FC15-FC16**)
-  - Frontend: 70+ тестов (converters, hooks)
-  - `.cursorrules` – проектный интеллект (340+ строк)
-  - TESTING.md, DOCKER_REBUILD.md – руководства по тестированию
-  - README_MODBUS_TESTS.md – детальная документация Modbus тестов
-  - **100% покрытие всех реализованных Modbus функций**
+- **Тесты (2026-02-20, все проходят):**
+  - Backend: 102 теста (API, encoding_utils, **Modbus FC01–FC06/FC15–FC16**, WebSocket)
+  - Frontend: 55 тестов (converters, useCollapse, WebSocketContext — 6 кейсов)
+  - `.cursorrules` – проектный интеллект
+  - TESTING.md, DOCKER_REBUILD.md, README_MODBUS_TESTS.md
+  - **Исправлены падающие тесты WebSocketContext:** переподключение проверяется только переходом в «disconnected» при code 1006; «multiple channels» — реальные таймеры и timeout
 
 **Итоги:**
-- Frontend: 40+ новых файлов, модульная структура, тесты для converters/hooks
-- Backend: storage разделён на 4 класса, полное покрытие Modbus (59 тестов)
-- Документация: 8 файлов (2000+ строк)
-- Тесты: 164+ теста, производительность ~2s
-- Git commits: рефакторинг + тесты
+- Frontend: модульная структура, тесты converters/hooks/WebSocket
+- Backend: модульная storage, полное покрытие Modbus, 102 теста
+- Документация: ARCHITECTURE, CONTRIBUTING, API, Memory Bank
+- Тесты: 157 всего (102 backend + 55 frontend), все зелёные
 - TypeScript компиляция: ✅ успешна
 - Python синтаксис: ✅ корректен
 

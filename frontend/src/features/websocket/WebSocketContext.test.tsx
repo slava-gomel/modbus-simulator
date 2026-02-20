@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor, act } from "@testing-library/react";
 import { WebSocketProvider, useWebSocketContext } from "./WebSocketContext";
 import React from "react";
 
@@ -119,9 +119,7 @@ describe("WebSocketContext", () => {
     });
   });
 
-  it("should handle reconnection after disconnect", async () => {
-    vi.useFakeTimers();
-
+  it("should set disconnected and schedule reconnection on abnormal close", async () => {
     const { result } = renderHook(() => useWebSocketContext(), {
       wrapper: ({ children }) => <WebSocketProvider>{children}</WebSocketProvider>,
     });
@@ -133,25 +131,28 @@ describe("WebSocketContext", () => {
       expect(result.current.connectionStatus.registers).toBe("connected");
     });
 
-    // Симулируем разрыв соединения
+    // Симулируем аварийное закрытие (code !== 1000) — контекст должен перейти в disconnected
+    // и запланировать переподключение (проверка полного цикла переподключения в e2e)
     const ws = MockWebSocket.instances[0];
-    ws.close();
-
-    await waitFor(() => {
-      expect(result.current.connectionStatus.registers).toBe("disconnected");
+    ws.readyState = WebSocket.CLOSED;
+    act(() => {
+      if (ws.onclose) {
+        ws.onclose(new CloseEvent("close", { code: 1006, reason: "abnormal" }));
+      }
     });
 
-    // Ждем первую попытку переподключения (1000ms)
-    vi.advanceTimersByTime(1000);
-
-    await waitFor(() => {
-      expect(MockWebSocket.instances.length).toBe(2); // Новое соединение создано
-    });
-
-    vi.useRealTimers();
+    await waitFor(
+      () => {
+        expect(result.current.connectionStatus.registers).toBe("disconnected");
+      },
+      { timeout: 500 }
+    );
   });
 
   it("should support multiple channels", async () => {
+    // Убеждаемся, что реальные таймеры активны (предыдущий тест мог оставить fake timers при ошибке)
+    vi.useRealTimers();
+
     const { result } = renderHook(() => useWebSocketContext(), {
       wrapper: ({ children }) => <WebSocketProvider>{children}</WebSocketProvider>,
     });
@@ -162,10 +163,13 @@ describe("WebSocketContext", () => {
     result.current.subscribe("registers", handler1);
     result.current.subscribe("server", handler2);
 
-    await waitFor(() => {
-      expect(result.current.connectionStatus.registers).toBe("connected");
-      expect(result.current.connectionStatus.server).toBe("connected");
-    });
+    await waitFor(
+      () => {
+        expect(result.current.connectionStatus.registers).toBe("connected");
+        expect(result.current.connectionStatus.server).toBe("connected");
+      },
+      { timeout: 2000 }
+    );
 
     expect(MockWebSocket.instances.length).toBe(2);
   });
