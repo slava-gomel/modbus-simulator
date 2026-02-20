@@ -60,13 +60,13 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
   };
 
   return (
-    <div className="registers-container">
+    <div className="registers-table-wrapper">
       <table className="registers-table">
         <thead>
           <tr className="registers-header-row">
-            <th>ADDRESS RANGE</th>
+            <th>ADDR</th>
             {Array.from({ length: columnsPerRow }, (_, i) => (
-              <th key={i}>+{i}</th>
+              <th key={i} title={`Смещение +${i}`}>+{i}</th>
             ))}
           </tr>
         </thead>
@@ -105,6 +105,7 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
                       isRecentlyChanged={isChanged}
                       generatorHighlight={generatorHighlight}
                       colspan={groupSize}
+                      title={`Register ${addr}`}
                       onEdit={(text) => onHoldingEdit(globalIndex, text)}
                       onBlur={(text) => onHoldingBlur(globalIndex, text)}
                     />

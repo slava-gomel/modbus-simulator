@@ -6,19 +6,23 @@ import { getSignalWavePathLive } from "./utils";
 interface WaveChartProps {
   generator: SignalGeneratorConfig;
   samples: number[];
+  size?: "sm" | "lg";
 }
 
-/**
- * SVG-график сигнала генератора в реальном времени
- */
-const WaveChart: React.FC<WaveChartProps> = ({ generator, samples }) => {
-  const path = getSignalWavePathLive(samples, generator);
+const SIZES = {
+  sm: { w: 120, h: 32, className: "generator-wave-chart" },
+  lg: { w: 240, h: 80, className: "generator-wave-chart-lg" },
+};
+
+const WaveChart: React.FC<WaveChartProps> = ({ generator, samples, size = "sm" }) => {
+  const { w, h, className } = SIZES[size];
+  const path = getSignalWavePathLive(samples, generator, w, h);
   const color = generator.neon_color ?? DEFAULT_NEON_COLOR;
 
   return (
     <svg
-      className="generator-wave-chart"
-      viewBox="0 0 120 32"
+      className={className}
+      viewBox={`0 0 ${w} ${h}`}
       preserveAspectRatio="none"
       aria-hidden
     >

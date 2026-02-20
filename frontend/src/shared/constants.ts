@@ -28,3 +28,29 @@ export const LOG_COLORS: Record<string, string> = {
   response: "#9ca3af",
   info: "#e5e7eb"
 };
+
+export type LogCategory = "error" | "server" | "modbus" | "generator" | "profile";
+
+export const LOG_TYPE_CATEGORIES: Record<string, LogCategory> = {
+  error: "error",
+  server_start: "server",
+  server_stop: "server",
+  client_connect: "server",
+  client_disconnect: "server",
+  generator_create: "generator",
+  generator_edit: "generator",
+  generator_enable: "generator",
+  generator_disable: "generator",
+  generator_delete: "generator",
+  generator_load: "generator",
+  profile_save: "profile",
+  profile_load: "profile",
+  profile_update: "profile",
+  modbus_request: "modbus",
+  modbus_response: "modbus",
+  modbus_req_hex: "modbus",
+  modbus_rsp_hex: "modbus",
+  modbus_write: "modbus",
+  request: "modbus",
+  response: "modbus",
+};

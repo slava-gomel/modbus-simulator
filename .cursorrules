@@ -17,7 +17,7 @@
 **Проблема:** App.tsx был 2714 строк с вложенной бизнес-логикой.
 **Решение:** Feature-based модульная архитектура:
 - Каждая feature = Context (state + logic) + UI компоненты
-- App.tsx – только композиция (~140 строк)
+- App.tsx – только композиция (~165 строк)
 - AppProviders.tsx – управление зависимостями между контекстами
 
 **Важно:** Порядок providers критичен! WebSocketProvider должен быть выше всех features, которые используют WebSocket. RegistersProvider должен быть выше ServerProviderWrapper для передачи callback `markRegistersChanged`.
@@ -66,6 +66,17 @@
 - **Неоновая подсветка генераторов:** настраиваемый цвет через поле `neon_color` в SignalGeneratorConfig
 - **Зелёная вспышка Modbus-записей:** animation применяется к input элементу с классом `highlight-flash`
 - **Переиспользуемые классы:** `panel`, `field-*`, `btn`, `registers-table*`, `log-*`, `generator-value-display`
+- **GUI v4 стили (2026-02-20):**
+  - `.toggle-switch` / `.toggle-switch--on` / `.toggle-switch--disabled` – ToggleSwitch
+  - `.confirm-overlay` / `.confirm-dialog` – ConfirmDialog с backdrop-blur
+  - `.skeleton-block` / `.skeleton-table` – shimmer анимация загрузки
+  - `.status-dot-sm` / `.status-dot-sm--running` – пульсирующая точка статуса в AppHeader
+  - `.app-header-status` / `.app-profile-badge` – статус и профиль в шапке
+  - `.badge-log-type[data-category="..."]` – цветные badge-и по категориям логов
+  - `.generator-form-layout` / `.generator-form-fields` / `.generator-form-preview` – 2-колоночная форма генератора
+  - `.btn-chip-icon` – icon-only кнопки для действий
+  - `.log-pin-btn` – кнопка auto-scroll
+  - Responsive: `@media (max-width: 880px)` для одной колонки настроек
 
 ### Генераторы сигналов
 **Критическое решение:** Движок хранит ВСЕ генераторы (включённые и выключенные), а фильтрация по `enabled` происходит только в run-loop.
@@ -159,6 +170,19 @@
 - **Документация:** ARCHITECTURE.md (287 строк), CONTRIBUTING.md (420 строк), docs/API.md (400+ строк)
 - **Результат:** +3015/-1020 строк, 40 файлов изменено
 
+### Фаза 4 (2026-02-20) - GUI Improvements v4
+- **Зависимости:** @heroicons/react, sonner
+- **Toast уведомления:** Sonner во всех Context-ах (Config, Server, Profiles, Generators)
+- **Новые shared-компоненты:** ToggleSwitch, ConfirmDialog, Skeleton, ShortcutsHelp
+- **AppHeader:** статус сервера (пульсирующая точка) + badge профиля
+- **Heroicons:** иконки на всех кнопках (Play/Stop, Plus, Check, Trash, Pencil, Arrow, Chevron)
+- **Генераторы:** ToggleSwitch, icon-кнопки, 2-колоночная форма с предпросмотром
+- **Логи:** цветные badge-и по категориям, auto-scroll, пагинация, resizable
+- **Keyboard shortcuts:** `?`, Ctrl+S, Ctrl+Shift+R, Escape
+- **Dropdown формата:** select вместо radio для RegistersFormatSelector
+- **Responsive:** адаптивный layout для узких экранов
+- **Результат:** +960/-348 строк, 32 файла (27 изменено, 5 новых)
+
 ## Инструменты и зависимости
 
 ### Backend
@@ -245,7 +269,8 @@
 1. ✅ **Тесты:** Unit тесты для converters (backend + frontend) – ЗАВЕРШЕНО
 2. ✅ **Modbus тесты:** Полное покрытие всех FC01-FC06, FC15-FC16 (59 тестов) – ЗАВЕРШЕНО
 3. ✅ **WebSocket:** Real-time обновления вместо polling; исправлена лавина запросов при начальной загрузке – ЗАВЕРШЕНО
-4. **CI/CD:** GitHub Actions для запуска тестов
-5. **E2E тесты:** Playwright для критичных пользовательских сценариев
-6. **Modbus E2E:** Тесты с реальным TCP клиентом
-7. **Production готовность:** CORS whitelist, HTTPS, rate limiting
+4. ✅ **GUI Improvements v4 (2026-02-20):** Toast (Sonner), Heroicons, ToggleSwitch, ConfirmDialog, Skeleton, AppHeader со статусом, dropdown формата, цветные badge-и логов, keyboard shortcuts, auto-scroll, responsive, пагинация логов, 2-колоночная форма генераторов – ЗАВЕРШЕНО
+5. **CI/CD:** GitHub Actions для запуска тестов
+6. **E2E тесты:** Playwright для критичных пользовательских сценариев
+7. **Modbus E2E:** Тесты с реальным TCP клиентом
+8. **Production готовность:** CORS whitelist, HTTPS, rate limiting

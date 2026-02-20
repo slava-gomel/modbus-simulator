@@ -90,9 +90,7 @@ export const getSignalWavePathStatic = (waveType: SignalWaveType): string => {
 /**
  * Путь графика по живым выборкам (нормализация по offset/amplitude генератора)
  */
-export const getSignalWavePathLive = (samples: number[], g: SignalGeneratorConfig): string => {
-  const w = 120;
-  const h = 32;
+export const getSignalWavePathLive = (samples: number[], g: SignalGeneratorConfig, w = 120, h = 32): string => {
   const pad = 2;
   const cy = h / 2;
   const amp = (h - 2 * pad) / 2;

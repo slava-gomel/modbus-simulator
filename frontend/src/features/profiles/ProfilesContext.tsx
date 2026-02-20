@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback, ReactNode } from "react";
+import { toast } from "sonner";
 import { ProfileItem, listProfiles, saveProfile, loadProfile, updateProfile, deleteProfile } from "../../api";
 import { useLogsContext } from "../logs";
 
@@ -55,9 +56,11 @@ export const ProfilesProvider: React.FC<{
         "profile_save",
         `Профиль «${saved.name}» сохранён (slug: ${saved.slug})`
       );
+      toast.success(`Профиль «${saved.name}» сохранён`);
     } catch (e) {
       setProfilesError("Не удалось сохранить профиль");
       pushLog("error", "Сохранение профиля: ошибка");
+      toast.error("Не удалось сохранить профиль");
     } finally {
       setProfilesLoading(false);
     }
@@ -77,23 +80,17 @@ export const ProfilesProvider: React.FC<{
       const currentProfile = profiles.find((p) => p.slug === slug);
       const profileLabel = currentProfile?.name || slug;
       pushLog("profile_load", `Профиль «${profileLabel}» загружен`);
+      toast.success(`Профиль «${profileLabel}» загружен`);
     } catch (e) {
       setProfilesError("Не удалось загрузить профиль");
       pushLog("error", "Загрузка профиля: ошибка");
+      toast.error("Не удалось загрузить профиль");
     } finally {
       setProfilesLoading(false);
     }
   }, [onProfileLoad, pushLog, refreshProfiles, profiles]);
 
   const updateProfileBySlug = useCallback(async (slug: string) => {
-    if (
-      !window.confirm(
-        "Обновить выбранный профиль из текущей конфигурации?\n" +
-          "Будут перезаписаны конфигурация, состояние регистров и генераторы."
-      )
-    ) {
-      return;
-    }
     try {
       setProfilesLoading(true);
       setProfilesError(null);
@@ -105,16 +102,17 @@ export const ProfilesProvider: React.FC<{
         "profile_update",
         `Профиль «${currentProfile.name}» обновлён из текущей конфигурации`
       );
+      toast.success(`Профиль «${currentProfile.name}» обновлён`);
     } catch (e) {
       setProfilesError("Не удалось обновить профиль");
       pushLog("error", "Обновление профиля: ошибка");
+      toast.error("Не удалось обновить профиль");
     } finally {
       setProfilesLoading(false);
     }
   }, [pushLog, refreshProfiles, profiles]);
 
   const deleteProfileBySlug = useCallback(async (slug: string) => {
-    if (!window.confirm("Удалить профиль?")) return;
     try {
       setProfilesError(null);
       await deleteProfile(slug);
@@ -122,9 +120,11 @@ export const ProfilesProvider: React.FC<{
       if (slug === currentProfileSlug) {
         setCurrentProfileSlug("default");
       }
+      toast.success("Профиль удалён");
     } catch (e) {
       setProfilesError("Не удалось удалить профиль");
       pushLog("error", "Удаление профиля: ошибка");
+      toast.error("Не удалось удалить профиль");
     }
   }, [pushLog, refreshProfiles, currentProfileSlug]);
 

@@ -1,7 +1,9 @@
 import React from "react";
+import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
 import { useRegisters } from "./RegistersContext";
 import { useGenerators } from "../generators";
 import { useCollapse } from "../../shared/hooks";
+import { Skeleton } from "../../shared/components";
 import RegistersTable from "./RegistersTable";
 import CoilsTable from "./CoilsTable";
 import RegistersToolbar from "./RegistersToolbar";
@@ -65,7 +67,9 @@ const RegistersPanel: React.FC = () => {
               onClick={toggleCollapsed}
               aria-label={collapsed ? "Развернуть регистры" : "Свернуть регистры"}
             >
-              {collapsed ? "▸" : "▾"}
+              {collapsed
+                ? <ChevronRightIcon style={{ width: 18, height: 18 }} />
+                : <ChevronDownIcon style={{ width: 18, height: 18 }} />}
             </button>
           </div>
         </div>
@@ -90,7 +94,9 @@ const RegistersPanel: React.FC = () => {
               }
             />
 
-            {stateLoading && <div className="panel-subtitle">Загрузка…</div>}
+            {stateLoading && values.length === 0 && (
+              <Skeleton variant="table" rows={2} />
+            )}
             {stateError && (
               <div className="error-text">
                 <span className="error-dot" />

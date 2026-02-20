@@ -11,9 +11,15 @@ export interface RegistersFormatSelectorProps {
   onOrderChange: (order: RegisterOrder) => void;
 }
 
-/**
- * Селектор формата отображения регистров (INT16/32/64, FLOAT32/64, BITMAP)
- */
+const formatOptions: { id: RegisterFormatKind; label: string }[] = [
+  { id: "int16", label: "INT16" },
+  { id: "int32", label: "INT32" },
+  { id: "int64", label: "INT64" },
+  { id: "float32", label: "FLOAT32" },
+  { id: "float64", label: "FLOAT64" },
+  { id: "bitmap", label: "BITMAP" }
+];
+
 const RegistersFormatSelector: React.FC<RegistersFormatSelectorProps> = ({
   format,
   sign,
@@ -22,15 +28,6 @@ const RegistersFormatSelector: React.FC<RegistersFormatSelectorProps> = ({
   onSignChange,
   onOrderChange
 }) => {
-  const formatOptions = [
-    { id: "int16", label: "INT16" },
-    { id: "int32", label: "INT32" },
-    { id: "int64", label: "INT64" },
-    { id: "float32", label: "FLOAT32" },
-    { id: "float64", label: "FLOAT64" },
-    { id: "bitmap", label: "BITMAP" }
-  ];
-
   const signOptions = [
     { id: "unsigned", label: "Unsigned" },
     { id: "signed", label: "Signed" }
@@ -42,28 +39,33 @@ const RegistersFormatSelector: React.FC<RegistersFormatSelectorProps> = ({
   ];
 
   const showSignedness = format !== "bitmap";
-  const showWordOrder = 
-    format === "int32" || 
-    format === "int64" || 
-    format === "float32" || 
+  const showWordOrder =
+    format === "int32" ||
+    format === "int64" ||
+    format === "float32" ||
     format === "float64";
 
   return (
     <div className="reg-format-wrapper">
-      <div className="reg-format-label">Формат отображения</div>
       <div className="reg-format-group">
-        <RadioGroup
-          name="format"
-          label="FORMAT:"
-          options={formatOptions}
-          value={format}
-          onChange={(val) => onFormatChange(val as RegisterFormatKind)}
-        />
+        <div className="reg-format-subrow">
+          <div className="reg-format-subrow-label">Формат:</div>
+          <select
+            className="field-select"
+            value={format}
+            onChange={(e) => onFormatChange(e.target.value as RegisterFormatKind)}
+            style={{ minWidth: 110 }}
+          >
+            {formatOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </div>
 
         {showSignedness && (
           <RadioGroup
             name="sign"
-            label="SIGNEDNESS:"
+            label="Знак:"
             options={signOptions}
             value={sign}
             onChange={(val) => onSignChange(val as RegisterSign)}
@@ -73,7 +75,7 @@ const RegistersFormatSelector: React.FC<RegistersFormatSelectorProps> = ({
         {showWordOrder && (
           <RadioGroup
             name="order"
-            label="WORD ORDER:"
+            label="Порядок:"
             options={orderOptions}
             value={order}
             onChange={(val) => onOrderChange(val as RegisterOrder)}

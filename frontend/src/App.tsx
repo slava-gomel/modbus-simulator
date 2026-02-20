@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
+import { Toaster } from "sonner";
+import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
 import { AppProviders } from "./AppProviders";
 import { useAuth, LoginForm } from "./features/auth";
-import { ServerPanel } from "./features/server";
+import { ServerPanel, useServer } from "./features/server";
 import { ConfigPanel } from "./features/config";
 import { ProfilesPanel, useProfiles } from "./features/profiles";
 import { RegistersPanel } from "./features/registers";
@@ -9,8 +11,8 @@ import { GeneratorsPanel } from "./features/generators";
 import { LogView } from "./features/logs";
 import { useConfig } from "./features/config";
 import { useGenerators } from "./features/generators";
-import { useCollapse } from "./shared/hooks";
-import { ConnectionStatus } from "./shared/components";
+import { useCollapse, useKeyboardShortcuts } from "./shared/hooks";
+import { ConnectionStatus, ShortcutsHelp } from "./shared/components";
 
 /**
  * Основной компонент приложения
@@ -19,6 +21,18 @@ import { ConnectionStatus } from "./shared/components";
 export const App: React.FC = () => {
   return (
     <AppProviders>
+      <Toaster
+        position="bottom-right"
+        theme="dark"
+        toastOptions={{
+          style: {
+            background: "rgba(17, 24, 39, 0.95)",
+            border: "1px solid rgba(148, 163, 184, 0.4)",
+            color: "#e5e7eb",
+            backdropFilter: "blur(8px)",
+          },
+        }}
+      />
       <ConnectionStatus />
       <AppContent />
     </AppProviders>
@@ -48,12 +62,22 @@ const AppContent: React.FC = () => {
     return <LoginForm />;
   }
 
+  const { serverStatus } = useServer();
+  const profileName = getCurrentProfileName(profiles, currentProfileSlug);
+
+  const { showHelp, setShowHelp } = useKeyboardShortcuts();
+
   // Основной интерфейс
   return (
     <div className="app-root">
-      <AppHeader />
+      <ShortcutsHelp open={showHelp} onClose={() => setShowHelp(false)} />
+      <AppHeader
+        serverRunning={serverStatus?.running}
+        serverAddr={serverStatus ? `${serverStatus.host}:${serverStatus.port}` : undefined}
+        currentProfileName={profileName}
+      />
       <main className="layout-grid">
-        <SettingsSection currentProfileName={getCurrentProfileName(profiles, currentProfileSlug)} />
+        <SettingsSection currentProfileName={profileName} />
         <RegistersPanel />
         <GeneratorsPanel />
         <LogView />
@@ -62,7 +86,13 @@ const AppContent: React.FC = () => {
   );
 };
 
-const AppHeader: React.FC = () => {
+interface AppHeaderProps {
+  serverRunning?: boolean;
+  serverAddr?: string;
+  currentProfileName?: string;
+}
+
+const AppHeader: React.FC<AppHeaderProps> = ({ serverRunning, serverAddr, currentProfileName }) => {
   return (
     <header className="app-header">
       <div className="app-title-block">
@@ -74,11 +104,26 @@ const AppHeader: React.FC = () => {
           Управление Modbus‑сервером, регистрами и профилями в одном современном интерфейсе
         </div>
       </div>
-      <div className="app-badges">
-        <span className="badge-soft">FastAPI · React · pymodbus</span>
-        <span className="badge-soft" data-variant="danger">
-          Только для тестирования и отладки
-        </span>
+      <div className="app-header-right">
+        <div className="app-header-status">
+          <span
+            className={`status-dot-sm ${serverRunning ? "status-dot-sm--running" : ""}`}
+          />
+          <span className="app-header-status-text">
+            {serverRunning ? serverAddr || "Запущен" : "Остановлен"}
+          </span>
+        </div>
+        {currentProfileName && (
+          <span className="app-profile-badge">
+            {currentProfileName}
+          </span>
+        )}
+        <div className="app-badges">
+          <span className="badge-soft">FastAPI · React · pymodbus</span>
+          <span className="badge-soft" data-variant="danger">
+            Только для тестирования и отладки
+          </span>
+        </div>
       </div>
     </header>
   );
@@ -110,7 +155,9 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({ currentProfileName })
               onClick={toggleCollapsed}
               aria-label={collapsed ? "Развернуть настройки" : "Свернуть настройки"}
             >
-              {collapsed ? "▸" : "▾"}
+              {collapsed
+                ? <ChevronRightIcon style={{ width: 18, height: 18 }} />
+                : <ChevronDownIcon style={{ width: 18, height: 18 }} />}
             </button>
           </div>
         </div>

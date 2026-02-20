@@ -1,4 +1,5 @@
 import React from "react";
+import { PlusIcon, ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
 import { useGenerators } from "./GeneratorsContext";
 import { useCollapse } from "../../shared/hooks";
 import GeneratorForm from "./GeneratorForm";
@@ -34,6 +35,7 @@ const GeneratorsPanel: React.FC = () => {
                 className="btn btn-sm"
                 onClick={handleCreateGenerator}
               >
+                <PlusIcon />
                 Создать генератор
               </button>
             )}
@@ -43,7 +45,9 @@ const GeneratorsPanel: React.FC = () => {
               onClick={toggleCollapsed}
               aria-label={collapsed ? "Развернуть генераторы" : "Свернуть генераторы"}
             >
-              {collapsed ? "▸" : "▾"}
+              {collapsed
+                ? <ChevronRightIcon style={{ width: 18, height: 18 }} />
+                : <ChevronDownIcon style={{ width: 18, height: 18 }} />}
             </button>
           </div>
         </div>

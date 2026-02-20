@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback, ReactNode } from "react";
+import { toast } from "sonner";
 import { SignalGeneratorConfig, fetchSignalGenerators, saveSignalGenerators } from "../../api";
 import { useLogsContext } from "../logs";
 import { useWebSocket } from "../../shared/hooks";
@@ -127,8 +128,10 @@ export const GeneratorsProvider: React.FC<{ children: ReactNode }> = ({ children
         action,
         `Генератор «${label}» ${verb}. ${formatGeneratorLogParams(editingGenerator)}`
       );
+      toast.success(`Генератор «${label}» ${verb}`);
     } catch {
       pushLog("error", "Не удалось сохранить генераторы");
+      toast.error("Не удалось сохранить генераторы");
     }
   }, [editingGenerator, signalGenerators, pushLog]);
 
@@ -151,8 +154,10 @@ export const GeneratorsProvider: React.FC<{ children: ReactNode }> = ({ children
       } else {
         pushLog("generator_delete", `Генератор «${label}» удалён.`);
       }
+      toast.success(`Генератор «${label}» удалён`);
     } catch {
       pushLog("error", "Не удалось сохранить генераторы");
+      toast.error("Не удалось сохранить генераторы");
     }
   }, [signalGenerators, pushLog]);
 

@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowUpTrayIcon, BackspaceIcon, SparklesIcon } from "@heroicons/react/20/solid";
 import { RegisterKind, REGISTER_KINDS } from "../../shared/types";
 
 export interface RegistersToolbarProps {
@@ -15,9 +16,6 @@ export interface RegistersToolbarProps {
   showWriteButtons: boolean;
 }
 
-/**
- * Панель инструментов для работы с регистрами (тип, диапазон, операции)
- */
 const RegistersToolbar: React.FC<RegistersToolbarProps> = ({
   selectedKind,
   start,
@@ -91,7 +89,8 @@ const RegistersToolbar: React.FC<RegistersToolbarProps> = ({
               className="btn btn-sm"
               onClick={onBatchSave}
             >
-              Сохранить диапазон (batch)
+              <ArrowUpTrayIcon />
+              Сохранить (batch)
             </button>
             <button
               type="button"
@@ -102,7 +101,8 @@ const RegistersToolbar: React.FC<RegistersToolbarProps> = ({
                 onPresetApply(zeros);
               }}
             >
-              Заполнить нулями
+              <BackspaceIcon />
+              Нули
             </button>
             <button
               type="button"
@@ -115,7 +115,8 @@ const RegistersToolbar: React.FC<RegistersToolbarProps> = ({
                 onPresetApply(rand);
               }}
             >
-              Случайные значения
+              <SparklesIcon />
+              Случайные
             </button>
           </>
         )}

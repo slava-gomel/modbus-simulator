@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowDownTrayIcon, TrashIcon } from "@heroicons/react/20/solid";
 import { LogFilterKey } from "../../shared/types";
 
 export interface LogFiltersProps {
@@ -13,9 +14,6 @@ export interface LogFiltersProps {
   onExport: () => void;
 }
 
-/**
- * Панель фильтрации и управления логами
- */
 const LogFilters: React.FC<LogFiltersProps> = ({
   activeFilters,
   ipFilter,
@@ -113,15 +111,17 @@ const LogFilters: React.FC<LogFiltersProps> = ({
         type="button"
         className="btn btn-sm btn-icon"
         onClick={onExport}
+        title="Экспорт журнала в JSON"
       >
-        Экспорт JSON
+        <ArrowDownTrayIcon style={{ width: 16, height: 16 }} />
       </button>
       <button
         type="button"
         className="btn btn-sm btn-icon"
         onClick={onClear}
+        title="Очистить журнал"
       >
-        Очистить
+        <TrashIcon style={{ width: 16, height: 16 }} />
       </button>
     </>
   );

@@ -1,4 +1,5 @@
 import React from "react";
+import { PlayIcon, StopIcon } from "@heroicons/react/20/solid";
 import { useServer } from "./ServerContext";
 
 interface ServerPanelProps {
@@ -12,12 +13,7 @@ const ServerPanel: React.FC<ServerPanelProps> = ({ currentProfileName }) => {
     <section className="panel panel-server">
       <div className="panel-inner">
         <div className="panel-header">
-          <div>
-            <div className="panel-title">Modbus сервер</div>
-            <div className="panel-subtitle">
-              Старт / стоп и текущее состояние TCP‑сервера
-            </div>
-          </div>
+          <div className="panel-title">Modbus сервер</div>
           <div className="panel-toolbar">
             <div className="status-pill">
               <span
@@ -27,11 +23,6 @@ const ServerPanel: React.FC<ServerPanelProps> = ({ currentProfileName }) => {
               <span className="status-label">
                 {serverStatus?.running ? "запущен" : "остановлен"}
               </span>
-              {serverStatus && (
-                <span className="status-meta">
-                  {serverStatus.host}:{serverStatus.port}
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -51,8 +42,8 @@ const ServerPanel: React.FC<ServerPanelProps> = ({ currentProfileName }) => {
               onClick={() => void handleServerStart()}
               disabled={serverLoading || !!serverStatus?.running}
             >
-              <span data-dot="" />
-              Запустить сервер
+              <PlayIcon />
+              Запустить
             </button>
             <button
               type="button"
@@ -61,16 +52,15 @@ const ServerPanel: React.FC<ServerPanelProps> = ({ currentProfileName }) => {
               onClick={() => void handleServerStop()}
               disabled={serverLoading || !serverStatus?.running}
             >
+              <StopIcon />
               Остановить
             </button>
           </div>
         </div>
 
         {currentProfileName && (
-          <div className="panel-footer">
-            <div className="panel-subtitle">
-              Текущий профиль: {currentProfileName}
-            </div>
+          <div className="panel-subtitle">
+            Профиль: {currentProfileName}
           </div>
         )}
       </div>

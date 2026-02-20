@@ -1,19 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
+import { PencilIcon, TrashIcon } from "@heroicons/react/20/solid";
 import { SignalGeneratorConfig } from "../../api";
 import { useGenerators } from "./GeneratorsContext";
+import { ToggleSwitch, ConfirmDialog } from "../../shared/components";
 import WaveChart from "./WaveChart";
 import { neonGlowStyle, formatGeneratorValue } from "./utils";
 
 interface GeneratorsListProps {
   generators: SignalGeneratorConfig[];
-  // Текущее числовое значение генератора (последнее известное)
   generatorValues: Record<string, number>;
   generatorChartSamples: Record<string, number[]>;
 }
 
-/**
- * Таблица со списком генераторов
- */
 const GeneratorsList: React.FC<GeneratorsListProps> = ({
   generators,
   generatorValues,
@@ -25,6 +23,8 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
     handleDeleteGenerator
   } = useGenerators();
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   if (generators.length === 0) {
     return (
       <div style={{ padding: "1rem", textAlign: "center", opacity: 0.7 }}>
@@ -33,19 +33,21 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
     );
   }
 
+  const genToDelete = confirmDeleteId
+    ? generators.find((g) => g.id === confirmDeleteId)
+    : null;
+
   return (
     <div className="signal-generator-list">
       <table className="registers-table">
         <thead>
           <tr className="registers-header-row">
             <th>Имя</th>
-            <th>Тип сигнала</th>
-            <th>Формат</th>
-            <th>Область</th>
+            <th>Тип</th>
             <th>Адрес</th>
             <th>График</th>
             <th>Значение</th>
-            <th>Период, мс</th>
+            <th>Период</th>
             <th>Статус</th>
             <th>Действия</th>
           </tr>
@@ -53,10 +55,10 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
         <tbody>
           {generators.map((g) => (
             <tr key={g.id} className="registers-row">
-              <td>{g.name || g.id}</td>
+              <td title={`${g.data_type} · ${g.register_kind === "holding" ? "Holding" : "Input"} · ${g.register_count} рег.`}>
+                {g.name || g.id}
+              </td>
               <td>{g.wave_type}</td>
-              <td>{g.data_type}</td>
-              <td>{g.register_kind === "holding" ? "Holding (03/06)" : "Input (04)"}</td>
               <td>{g.start_address}</td>
               <td>
                 <WaveChart
@@ -73,31 +75,32 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
                   style={g.enabled ? neonGlowStyle(g.neon_color) : undefined}
                 />
               </td>
-              <td>{g.update_period_ms}</td>
-              <td>{g.enabled ? "Вкл" : "Выкл"}</td>
+              <td>{g.update_period_ms}ms</td>
+              <td>
+                <ToggleSwitch
+                  checked={g.enabled}
+                  onChange={() => void handleToggleGenerator(g.id)}
+                  label={g.enabled ? "Выключить генератор" : "Включить генератор"}
+                />
+              </td>
               <td>
                 <div className="btn-group">
                   <button
                     type="button"
-                    className="btn-chip"
+                    className="btn-chip btn-chip-icon"
                     onClick={() => handleEditGenerator(g.id)}
+                    title="Редактировать"
                   >
-                    Редактировать
+                    <PencilIcon />
                   </button>
                   <button
                     type="button"
-                    className="btn-chip"
-                    onClick={() => void handleToggleGenerator(g.id)}
-                  >
-                    {g.enabled ? "Выключить" : "Включить"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-chip"
+                    className="btn-chip btn-chip-icon"
                     data-variant="danger"
-                    onClick={() => void handleDeleteGenerator(g.id)}
+                    onClick={() => setConfirmDeleteId(g.id)}
+                    title="Удалить"
                   >
-                    Удалить
+                    <TrashIcon />
                   </button>
                 </div>
               </td>
@@ -105,6 +108,19 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
           ))}
         </tbody>
       </table>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        title="Удалить генератор?"
+        message={`Генератор «${genToDelete?.name || genToDelete?.id || ""}» будет удалён.`}
+        confirmLabel="Удалить"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmDeleteId) void handleDeleteGenerator(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 };

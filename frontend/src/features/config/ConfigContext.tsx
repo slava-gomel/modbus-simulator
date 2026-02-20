@@ -1,4 +1,5 @@
 import React, { createContext, useState, useCallback, ReactNode } from "react";
+import { toast } from "sonner";
 import { ModbusConfigDto, fetchConfig, updateConfig } from "../../api";
 import { useLogsContext } from "../logs";
 
@@ -39,9 +40,11 @@ export const ConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setConfigError(null);
       const saved = await updateConfig(newConfig);
       setConfig(saved);
+      toast.success("Конфигурация сохранена");
     } catch (e) {
       setConfigError("Не удалось сохранить конфигурацию");
       pushLog("error", "Сохранение конфигурации: ошибка");
+      toast.error("Ошибка сохранения конфигурации");
     } finally {
       setConfigLoading(false);
     }

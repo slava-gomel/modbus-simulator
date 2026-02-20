@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useRef, ReactNode, useCallback } from "react";
+import { toast } from "sonner";
 import { ServerStatus, fetchServerStatus, startServer, stopServer } from "../../api";
 import { useLogsContext } from "../logs";
 import { useWebSocket } from "../../shared/hooks";
@@ -42,11 +43,16 @@ export const ServerProvider: React.FC<{
       setServerStatus(status);
       if (status.running) {
         pushLog("server_start", `Сервер Modbus запущен (${status.host}:${status.port})`);
+        toast.success(`Сервер запущен (${status.host}:${status.port})`);
       }
-      if (status.error) pushLog("error", status.error);
+      if (status.error) {
+        pushLog("error", status.error);
+        toast.error(status.error);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка запуска сервера";
       pushLog("error", msg);
+      toast.error(msg);
       const status = await fetchServerStatus().catch(() => null);
       if (status) setServerStatus(status);
     } finally {
@@ -63,12 +69,15 @@ export const ServerProvider: React.FC<{
       setServerStatus(status);
       if (!status.running) {
         pushLog("server_stop", "Сервер Modbus остановлен");
+        toast.success("Сервер остановлен");
       } else if (status.error) {
         pushLog("error", status.error);
+        toast.error(status.error);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка остановки сервера";
       pushLog("error", msg);
+      toast.error(msg);
       const status = await fetchServerStatus().catch(() => null);
       if (status) setServerStatus(status);
     } finally {

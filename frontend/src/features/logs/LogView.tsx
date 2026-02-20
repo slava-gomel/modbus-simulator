@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
+import { ArrowDownIcon } from "@heroicons/react/20/solid";
 import { AppLogEntry, LogFilterKey } from "../../shared/types";
 import { useCollapse } from "../../shared/hooks";
 import { useLogsContext } from "./LogsContext";
@@ -11,6 +13,8 @@ const LogView: React.FC = () => {
   const [ipFilter, setIpFilter] = useState("");
   const [search, setSearch] = useState("");
   const [collapsed, toggleCollapsed] = useCollapse(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const toggleFilter = (key: LogFilterKey) => {
     setActiveFilters((prev) =>
@@ -92,7 +96,43 @@ const LogView: React.FC = () => {
     return match;
   };
 
+  const PAGE_SIZE = 100;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   const filtered = useMemo(() => eventLog.filter(isVisible), [eventLog, ipFilter, search, activeFilters]);
+  const reversed = useMemo(() => [...filtered].reverse(), [filtered]);
+  const visibleEntries = useMemo(() => reversed.slice(0, visibleCount), [reversed, visibleCount]);
+  const hasMore = visibleCount < reversed.length;
+
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [activeFilters, ipFilter, search]);
+
+  // Auto-scroll to bottom when new entries appear
+  useEffect(() => {
+    if (autoScroll && logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [filtered.length, autoScroll]);
+
+  const handleScroll = useCallback(() => {
+    if (!logRef.current) return;
+    const el = logRef.current;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    setAutoScroll(isAtBottom);
+
+    // Load more entries when scrolled near top
+    if (el.scrollTop < 50 && hasMore) {
+      const prevScrollHeight = el.scrollHeight;
+      setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, reversed.length));
+      requestAnimationFrame(() => {
+        if (logRef.current) {
+          logRef.current.scrollTop = logRef.current.scrollHeight - prevScrollHeight;
+        }
+      });
+    }
+  }, [hasMore, reversed.length]);
 
   const handleExport = () => {
     if (filtered.length === 0) return;
@@ -131,17 +171,32 @@ const LogView: React.FC = () => {
           </div>
           <div className="panel-toolbar">
             {!collapsed && (
-              <LogFilters
-                activeFilters={activeFilters}
-                ipFilter={ipFilter}
-                searchText={search}
-                onFilterToggle={toggleFilter}
-                onClearFilters={clearFilters}
-                onIpFilterChange={setIpFilter}
-                onSearchChange={setSearch}
-                onClear={clearLog}
-                onExport={handleExport}
-              />
+              <>
+                <LogFilters
+                  activeFilters={activeFilters}
+                  ipFilter={ipFilter}
+                  searchText={search}
+                  onFilterToggle={toggleFilter}
+                  onClearFilters={clearFilters}
+                  onIpFilterChange={setIpFilter}
+                  onSearchChange={setSearch}
+                  onClear={clearLog}
+                  onExport={handleExport}
+                />
+                <button
+                  type="button"
+                  className={`btn-chip btn-chip-icon log-pin-btn ${autoScroll ? "log-pin-btn--active" : ""}`}
+                  onClick={() => {
+                    setAutoScroll(true);
+                    if (logRef.current) {
+                      logRef.current.scrollTop = logRef.current.scrollHeight;
+                    }
+                  }}
+                  title={autoScroll ? "Авто-прокрутка включена" : "Прокрутить к последним"}
+                >
+                  <ArrowDownIcon />
+                </button>
+              </>
             )}
             <button
               type="button"
@@ -149,18 +204,27 @@ const LogView: React.FC = () => {
               onClick={toggleCollapsed}
               aria-label={collapsed ? "Развернуть журнал" : "Свернуть журнал"}
             >
-              {collapsed ? "▸" : "▾"}
+              {collapsed
+                ? <ChevronRightIcon style={{ width: 18, height: 18 }} />
+                : <ChevronDownIcon style={{ width: 18, height: 18 }} />}
             </button>
           </div>
         </div>
         {!collapsed && (
-          <div className="log-container">
+          <div className="log-container" ref={logRef} onScroll={handleScroll}>
             {filtered.length === 0 ? (
               <div className="log-empty">Нет записей журнала</div>
             ) : (
-              [...filtered].reverse().map((entry, i) => (
-                <LogEntry key={i} entry={entry} />
-              ))
+              <>
+                {hasMore && (
+                  <div className="log-load-more" style={{ textAlign: "center", padding: "0.3rem", fontSize: "0.72rem", color: "var(--text-soft)" }}>
+                    Показано {visibleCount} из {reversed.length} • прокрутите вверх для загрузки ещё
+                  </div>
+                )}
+                {visibleEntries.map((entry, i) => (
+                  <LogEntry key={i} entry={entry} />
+                ))}
+              </>
             )}
           </div>
         )}

@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+import { ArrowPathIcon, BookmarkIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, TrashIcon } from "@heroicons/react/20/solid";
 import { useProfiles } from "./ProfilesContext";
+import { ConfirmDialog, Skeleton } from "../../shared/components";
 
 const ProfilesPanel: React.FC = () => {
   const {
@@ -16,6 +18,8 @@ const ProfilesPanel: React.FC = () => {
 
   const [profileName, setProfileName] = useState("");
   const [profileComment, setProfileComment] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmUpdate, setConfirmUpdate] = useState<string | null>(null);
 
   const handleSave = async () => {
     await saveNewProfile(profileName, profileComment);
@@ -23,23 +27,27 @@ const ProfilesPanel: React.FC = () => {
     setProfileComment("");
   };
 
+  const profileToDelete = confirmDelete
+    ? profiles.find((p) => p.slug === confirmDelete)
+    : null;
+
+  const profileToUpdate = confirmUpdate
+    ? profiles.find((p) => p.slug === confirmUpdate)
+    : null;
+
   return (
     <section className="panel panel-profiles">
       <div className="panel-inner">
         <div className="panel-header">
-          <div>
-            <div className="panel-title">Профили</div>
-            <div className="panel-subtitle">
-              Сохраняйте и переключайте наборы конфигурации и регистров
-            </div>
-          </div>
+          <div className="panel-title">Профили</div>
           <div className="panel-toolbar">
             <button
               type="button"
-              className="btn btn-sm btn-icon"
+              className="btn-chip"
               onClick={() => void refreshProfiles()}
+              title="Обновить список профилей"
             >
-              Обновить список
+              <ArrowPathIcon style={{ width: 14, height: 14 }} />
             </button>
           </div>
         </div>
@@ -87,9 +95,14 @@ const ProfilesPanel: React.FC = () => {
               onClick={() => void handleSave()}
               disabled={profilesLoading || !profileName.trim()}
             >
-              Сохранить текущий профиль
+              <BookmarkIcon />
+              Сохранить профиль
             </button>
           </div>
+
+          {profilesLoading && profiles.length === 0 && (
+            <Skeleton variant="rect" rows={2} height="2.2rem" />
+          )}
 
           <ul className="profiles-list">
             {profiles.map((p) => (
@@ -112,25 +125,30 @@ const ProfilesPanel: React.FC = () => {
                     className="btn-chip"
                     onClick={() => void loadProfileBySlug(p.slug)}
                     disabled={profilesLoading}
+                    title="Загрузить профиль"
                   >
+                    <ArrowDownTrayIcon style={{ width: 13, height: 13 }} />
                     Загрузить
                   </button>
                   <button
                     type="button"
                     className="btn-chip"
-                    onClick={() => void updateProfileBySlug(p.slug)}
+                    onClick={() => setConfirmUpdate(p.slug)}
                     disabled={profilesLoading}
+                    title="Обновить из текущей конфигурации"
                   >
-                    Обновить из текущей конфигурации
+                    <ArrowUpTrayIcon style={{ width: 13, height: 13 }} />
+                    Обновить
                   </button>
                   {p.slug !== "default" && (
                     <button
                       type="button"
                       className="btn-chip"
                       data-variant="danger"
-                      onClick={() => void deleteProfileBySlug(p.slug)}
+                      onClick={() => setConfirmDelete(p.slug)}
+                      title="Удалить профиль"
                     >
-                      Удалить
+                      <TrashIcon style={{ width: 13, height: 13 }} />
                     </button>
                   )}
                 </div>
@@ -139,6 +157,31 @@ const ProfilesPanel: React.FC = () => {
           </ul>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Удалить профиль?"
+        message={`Профиль «${profileToDelete?.name || confirmDelete}» будет удалён безвозвратно.`}
+        confirmLabel="Удалить"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmDelete) void deleteProfileBySlug(confirmDelete);
+          setConfirmDelete(null);
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmUpdate}
+        title="Обновить профиль?"
+        message={`Профиль «${profileToUpdate?.name || confirmUpdate}» будет перезаписан текущей конфигурацией, регистрами и генераторами.`}
+        confirmLabel="Обновить"
+        onConfirm={() => {
+          if (confirmUpdate) void updateProfileBySlug(confirmUpdate);
+          setConfirmUpdate(null);
+        }}
+        onCancel={() => setConfirmUpdate(null)}
+      />
     </section>
   );
 };

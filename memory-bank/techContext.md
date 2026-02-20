@@ -16,6 +16,8 @@
 - Vite – сборка и dev-server.
 - React 18 + ReactDOM.
 - axios – HTTP-клиент.
+- **@heroicons/react** – SVG иконки (20/solid).
+- **sonner** – toast-уведомления.
 - WebSocket API – real-time коммуникация (нативный браузерный API).
 - Nginx – отдача статики и reverse proxy `/api` + `/ws` -> backend.
 
@@ -25,4 +27,3 @@
 - docker-compose:
   - Сеть между `backend` и `frontend`.
   - Volume `sim_data` для `/data` backend-а (config/state).
-

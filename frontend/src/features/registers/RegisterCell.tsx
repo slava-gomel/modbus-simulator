@@ -14,6 +14,7 @@ interface RegisterCellProps {
   isRecentlyChanged: boolean;
   generatorHighlight: string | null;
   colspan?: number;
+  title?: string;
   onEdit?: (text: string) => void;
   onBlur?: (text: string) => void;
 }
@@ -33,6 +34,7 @@ const RegisterCell: React.FC<RegisterCellProps> = ({
   isRecentlyChanged,
   generatorHighlight,
   colspan = 1,
+  title,
   onEdit,
   onBlur
 }) => {
@@ -61,7 +63,7 @@ const RegisterCell: React.FC<RegisterCellProps> = ({
 
   if (!editable) {
     return (
-      <td className="registers-cell" colSpan={colspan}>
+      <td className="registers-cell" colSpan={colspan} title={title}>
         <span className="registers-cell-static">{formattedValue}</span>
       </td>
     );
@@ -70,7 +72,7 @@ const RegisterCell: React.FC<RegisterCellProps> = ({
   const displayValue = editText !== undefined ? editText : formattedValue;
 
   return (
-    <td className="registers-cell" colSpan={colspan}>
+    <td className="registers-cell" colSpan={colspan} title={title}>
       <input
         className={inputClasses}
         type="text"

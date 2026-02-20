@@ -1,5 +1,7 @@
 import React from "react";
+import { CheckIcon } from "@heroicons/react/20/solid";
 import { useConfig } from "./ConfigContext";
+import { Skeleton } from "../../shared/components";
 
 const ConfigPanel: React.FC = () => {
   const { config, configLoading, configError, saveConfig, setConfig } = useConfig();
@@ -14,22 +16,18 @@ const ConfigPanel: React.FC = () => {
     <section className="panel panel-config">
       <div className="panel-inner">
         <div className="panel-header">
-          <div>
-            <div className="panel-title">Конфигурация сервера</div>
-            <div className="panel-subtitle">
-              Хост, порт и размеры областей регистров
-            </div>
-          </div>
+          <div className="panel-title">Конфигурация сервера</div>
         </div>
 
-        {configLoading && (
-          <div className="panel-subtitle">Загрузка конфигурации…</div>
-        )}
         {configError && (
           <div className="error-text">
             <span className="error-dot" />
             {configError}
           </div>
+        )}
+
+        {configLoading && !config && (
+          <Skeleton variant="rect" rows={3} height="2rem" />
         )}
 
         {config && (
@@ -118,6 +116,7 @@ const ConfigPanel: React.FC = () => {
                 className="btn btn-sm"
                 onClick={handleSave}
               >
+                <CheckIcon />
                 Сохранить конфигурацию
               </button>
             </div>
