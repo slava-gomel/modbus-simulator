@@ -68,7 +68,7 @@ SignalDataType = Literal["int16", "float32", "float64"]
 
 class SignalGeneratorConfig(BaseModel):
     """
-    Конфигурация одного генератора сигнала, привязанного к диапазону holding‑регистров.
+    Конфигурация одного генератора сигнала, привязанного к диапазону регистров.
 
     Генератор сам по себе ничего не знает о конкретном устройстве, только о том,
     какие регистры он заполняет и по какой формуле считает значения.
@@ -82,9 +82,9 @@ class SignalGeneratorConfig(BaseModel):
     )
 
     # Где писать значения
-    register_kind: Literal["holding"] = Field(
+    register_kind: Literal["holding", "input"] = Field(
         default="holding",
-        description="Тип области регистров, сейчас поддерживается только holding",
+        description="Тип области регистров: holding или input",
     )
     start_address: int = Field(
         ge=0,

@@ -236,6 +236,7 @@ PUT /state/holding?start=5&value=1234
 - `wave_type`: `sine`, `saw`, `square`, `constant`
 - `data_type`: `int16`, `float32`, `float64`
 - `register_count`: автоматически 1/2/4 в зависимости от `data_type`
+- `register_kind`: область регистров, в которую пишет генератор: `holding` (FC03/06) или `input` (FC04, только чтение со стороны Modbus клиента; запись выполняется через REST/генераторы)
 
 ---
 
@@ -484,16 +485,24 @@ app.add_middleware(
 # Получить конфигурацию
 curl http://localhost:8000/api/config
 
-# Прочитать регистры
+# Прочитать holding-регистры
 curl "http://localhost:8000/api/state/holding?start=0&count=10"
 
-# Записать значение
-curl -X PUT "http://localhost:8000/api/state/holding?start=5&value=1234"
+# Прочитать input-регистры
+curl "http://localhost:8000/api/state/input?start=0&count=10"
 
-# Пакетная запись
+# Записать значение в holding или input-регистр через REST
+curl -X PUT "http://localhost:8000/api/state/holding?start=5&value=1234"
+curl -X PUT "http://localhost:8000/api/state/input?start=5&value=4321"
+
+# Пакетная запись в holding или input
 curl -X PUT http://localhost:8000/api/state/holding/batch \
   -H "Content-Type: application/json" \
   -d '{"start":0,"count":3,"values":[100,200,300]}'
+
+curl -X PUT http://localhost:8000/api/state/input/batch \
+  -H "Content-Type: application/json" \
+  -d '{"start":0,"count":3,"values":[10,20,30]}'
 
 # Запустить сервер
 curl -X POST http://localhost:8000/api/server/start

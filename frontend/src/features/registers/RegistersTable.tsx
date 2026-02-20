@@ -36,7 +36,7 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
   onHoldingBlur
 }) => {
   const columnsPerRow = 8;
-  const isEditable = kind === "holding";
+  const isEditable = kind === "holding" || kind === "input";
   const groupSize = getFormatGroupSize(registerFormatKind);
 
   const registerRows: number[][] = useMemo(() => {
@@ -48,9 +48,9 @@ const RegistersTable: React.FC<RegistersTableProps> = ({
   }, [values, columnsPerRow]);
 
   const getGeneratorHighlightForAddress = (addr: number): string | null => {
-    if (kind !== "holding") return null;
     for (const g of signalGenerators) {
-      if (!g.enabled || g.register_kind !== "holding") continue;
+      if (!g.enabled) continue;
+      if (g.register_kind !== kind) continue;
       const genEnd = g.start_address + g.register_count;
       if (addr >= g.start_address && addr < genEnd) {
         return g.neon_color ?? DEFAULT_NEON_COLOR;

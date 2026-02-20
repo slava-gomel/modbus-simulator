@@ -25,7 +25,7 @@
 - `/api/server/modbus_log` – отдаёт кольцевой буфер событий Modbus (`ModbusLogEntry`) с поддержкой поля `since` и типом `modbus_write` для записей FC05/06/15/16, содержащих `kind` (`coils`/`holding`), `start`, `count`.
 - Фоновый движок генераторов: `SignalGeneratorEngine` в отдельном потоке обновляет holding‑регистры по таймеру; конфигурация задаётся через API и восстанавливается из профиля при load. Движок хранит полный список генераторов и в run‑loop учитывает только включённые (`enabled`), чтобы профили и `/api/generators` всегда работали с полной конфигурацией.
 
-**Паттерны Frontend (после комплексного рефакторинга v2 + WebSocket v3):**
+**Паттерны Frontend (после комплексного рефакторинга v2 + WebSocket v3 + editable Input):**
 - **Feature-based модульная архитектура:**
   - Каждая feature изолирована в своей папке: Context (state + logic) + UI компоненты
   - `features/auth/`, `features/config/`, `features/server/`, `features/profiles/`, `features/logs/`, `features/registers/`, `features/generators/`, `features/websocket/`
@@ -103,7 +103,7 @@
 - **UI организация (тёмный дешборд):**
   - Общий layout: верхний блок «Настройки» (Modbus-сервер, конфигурация, профили), ниже — «Регистры» и «Генераторы» на всю ширину, внизу — журнал
   - Все ключевые панели сворачиваемые
-  - Регистры: таблица диапазонов с неоновой подсветкой от генераторов и зелёной вспышкой от Modbus-записей (применяется к input, не к td)
+  - Регистры: таблица диапазонов с неоновой подсветкой от генераторов и зелёной вспышкой от Modbus-записей (применяется к input, не к td). Holding и Input редактируются одинаково (inline‑редактирование, batch, пресеты); Discrete Inputs остаются read‑only.
   - Переиспользуемые CSS-классы (`panel`, `field-*`, `btn`, `registers-table*`, `log-*`, `generator-value-display`)
   - ConnectionStatus banner при разрыве WebSocket соединения
 

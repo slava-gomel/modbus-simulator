@@ -115,16 +115,20 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleCellChange = useCallback(async (index: number, newValue: number) => {
     const addr = start + index;
-    if (selectedKind === "discrete_inputs" || selectedKind === "input") {
+    if (selectedKind === "discrete_inputs") {
       return;
     }
+
+    const writeKind =
+      selectedKind === "coils"
+        ? "coils"
+        : selectedKind === "holding"
+        ? "holding"
+        : "input";
+
     try {
       setStateError(null);
-      const resp = await writeSingle(
-        selectedKind === "coils" ? "coils" : "holding",
-        addr,
-        newValue
-      );
+      const resp = await writeSingle(writeKind, addr, newValue);
       const updated = [...values];
       updated[index] = resp.values[0];
       setValues(updated);
@@ -136,14 +140,16 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const handleBatchSave = useCallback(async () => {
     if (values.length === 0) return;
-    if (selectedKind !== "coils" && selectedKind !== "holding") return;
+    if (selectedKind !== "coils" && selectedKind !== "holding" && selectedKind !== "input") return;
     try {
       setStateError(null);
-      await writeBatch(
-        selectedKind === "coils" ? "coils" : "holding",
-        start,
-        values
-      );
+      const writeKind =
+        selectedKind === "coils"
+          ? "coils"
+          : selectedKind === "holding"
+          ? "holding"
+          : "input";
+      await writeBatch(writeKind, start, values);
       await reloadRegisters();
     } catch (e) {
       setStateError("Не удалось выполнить пакетную запись");
@@ -152,10 +158,21 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [values, selectedKind, start, reloadRegisters, pushLog]);
 
   const handlePresetApply = useCallback(async (newValues: number[]) => {
-    if (newValues.length === 0 || (selectedKind !== "coils" && selectedKind !== "holding")) return;
+    if (
+      newValues.length === 0 ||
+      (selectedKind !== "coils" && selectedKind !== "holding" && selectedKind !== "input")
+    ) {
+      return;
+    }
     try {
       setStateError(null);
-      await writeBatch(selectedKind === "coils" ? "coils" : "holding", start, newValues);
+      const writeKind =
+        selectedKind === "coils"
+          ? "coils"
+          : selectedKind === "holding"
+          ? "holding"
+          : "input";
+      await writeBatch(writeKind, start, newValues);
       setValues(newValues);
     } catch (e) {
       setStateError("Не удалось применить пресет");
@@ -197,7 +214,8 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
 
   const handleHoldingValueChange = useCallback(async (globalIndex: number, text: string) => {
-    if (selectedKind !== "holding") return;
+    if (selectedKind !== "holding" && selectedKind !== "input") return;
+    const writeKind = selectedKind === "holding" ? "holding" : "input";
     
     setEditHolding((prev) => ({ ...prev, [globalIndex]: text }));
 
@@ -212,13 +230,13 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
     const applyZero = async () => {
       try {
         if (groupSize === 1) {
-          const resp = await writeSingle("holding", baseAddr, 0);
+          const resp = await writeSingle(writeKind, baseAddr, 0);
           const updated = [...values];
           updated[groupBaseIndex] = resp.values[0];
           setValues(updated);
         } else {
           const regs = new Array(groupSize).fill(0);
-          await writeBatch("holding", baseAddr, regs);
+          await writeBatch(writeKind, baseAddr, regs);
           const updated = [...values];
           for (let i = 0; i < regs.length; i += 1) {
             if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];
@@ -259,12 +277,12 @@ export const RegistersProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Запись в Modbus
       if (groupSize === 1) {
-        const resp = await writeSingle("holding", baseAddr, regs[0]);
+        const resp = await writeSingle(writeKind, baseAddr, regs[0]);
         const updated = [...values];
         updated[groupBaseIndex] = resp.values[0];
         setValues(updated);
       } else {
-        await writeBatch("holding", baseAddr, regs);
+        await writeBatch(writeKind, baseAddr, regs);
         const updated = [...values];
         for (let i = 0; i < regs.length; i += 1) {
           if (groupBaseIndex + i < updated.length) updated[groupBaseIndex + i] = regs[i];

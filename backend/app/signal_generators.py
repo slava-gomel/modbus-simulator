@@ -94,7 +94,8 @@ class SignalGeneratorEngine:
                 gens = list(self._generators)
             
             # Собираем все обновления регистров за этот цикл
-            registers_updates: dict[int, int] = {}  # {address: value}
+            # Ключ: kind (holding/input), значение: {address: value}
+            registers_updates: dict[str, dict[int, int]] = {}
             
             # Применяем генераторы
             for g in gens:
@@ -107,13 +108,16 @@ class SignalGeneratorEngine:
                 updated_regs = self._apply_generator(g, now)
                 # Собираем обновления
                 if updated_regs:
+                    kind_updates = registers_updates.setdefault(g.cfg.register_kind, {})
                     for addr, val in updated_regs.items():
-                        registers_updates[addr] = val
+                        kind_updates[addr] = val
                 last_update[cfg.id] = now
             
             # Batch broadcast всех обновлений регистров за этот цикл
             if self._ws_manager and registers_updates:
-                self._broadcast_registers_batch(registers_updates)
+                for kind, updates in registers_updates.items():
+                    if updates:
+                        self._broadcast_registers_batch(kind, updates)
             
             # WebSocket broadcast значений генераторов
             if self._ws_manager and (now - last_broadcast) >= broadcast_interval:
@@ -160,7 +164,7 @@ class SignalGeneratorEngine:
             except RuntimeError:
                 pass
 
-    def _broadcast_registers_batch(self, registers_updates: dict[int, int]) -> None:
+    def _broadcast_registers_batch(self, kind: str, registers_updates: dict[int, int]) -> None:
         """Отправить batch обновление регистров через WebSocket."""
         if not registers_updates:
             return
@@ -178,15 +182,15 @@ class SignalGeneratorEngine:
                 values.append(registers_updates[addr])
             else:
                 # Разрыв - отправляем предыдущий диапазон
-                self._broadcast_register_range(start_addr, values)
+                self._broadcast_register_range(kind, start_addr, values)
                 start_addr = addr
                 values = [registers_updates[addr]]
         
         # Отправляем последний диапазон
         if values:
-            self._broadcast_register_range(start_addr, values)
+            self._broadcast_register_range(kind, start_addr, values)
     
-    def _broadcast_register_range(self, start: int, values: list[int]) -> None:
+    def _broadcast_register_range(self, kind: str, start: int, values: list[int]) -> None:
         """Отправить один диапазон регистров через WebSocket."""
         if not self._ws_manager or not self._loop:
             return
@@ -195,7 +199,7 @@ class SignalGeneratorEngine:
                 self._ws_manager.broadcast("registers", {
                     "event": "registers_changed",
                     "data": {
-                        "kind": "holding",
+                        "kind": kind,
                         "start": start,
                         "count": len(values),
                         "values": values
@@ -210,8 +214,8 @@ class SignalGeneratorEngine:
     def _apply_generator(self, gen: _RuntimeGenerator, now: float) -> dict[int, int] | None:
         """Применить генератор и вернуть обновлённые регистры {address: value}."""
         cfg = gen.cfg
-        # Только holding‑регистры поддерживаются на первом этапе.
-        if cfg.register_kind != "holding":
+        # Поддерживаем генераторы для holding и input регистров.
+        if cfg.register_kind not in ("holding", "input"):
             return None
 
         t = now - gen.start_time
@@ -219,18 +223,25 @@ class SignalGeneratorEngine:
         base = self._eval_wave(cfg, t)
 
         # Кодируем в 16‑битные регистры в зависимости от data_type
+        if cfg.register_kind == "holding":
+            write_single = self._core.write_single_holding_register
+            write_multiple = self._core.write_multiple_holding_registers
+        else:
+            write_single = self._core.write_single_input_register
+            write_multiple = self._core.write_multiple_input_registers
+
         registers_written = []
         if cfg.data_type == "int16":
             word = encode_int16(int(round(base)))
-            self._core.write_single_holding_register(cfg.start_address, word)
+            write_single(cfg.start_address, word)
             registers_written = [word]
         elif cfg.data_type == "float32":
             regs = encode_float32(base)
-            self._core.write_multiple_holding_registers(cfg.start_address, regs)
+            write_multiple(cfg.start_address, regs)
             registers_written = regs
         elif cfg.data_type == "float64":
             regs = encode_float64(base)
-            self._core.write_multiple_holding_registers(cfg.start_address, regs)
+            write_multiple(cfg.start_address, regs)
             registers_written = regs
         
         # Возвращаем обновлённые регистры для batch broadcast

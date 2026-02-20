@@ -83,7 +83,11 @@ const RegistersPanel: React.FC = () => {
               onReload={reloadRegisters}
               onBatchSave={handleBatchSave}
               onPresetApply={handlePresetApply}
-              showWriteButtons={selectedKind === "coils" || selectedKind === "holding"}
+              showWriteButtons={
+                selectedKind === "coils" ||
+                selectedKind === "holding" ||
+                selectedKind === "input"
+              }
             />
 
             {stateLoading && <div className="panel-subtitle">Загрузка…</div>}
@@ -94,7 +98,7 @@ const RegistersPanel: React.FC = () => {
               </div>
             )}
 
-            {selectedKind === "holding" && (
+            {(selectedKind === "holding" || selectedKind === "input") && (
               <RegistersFormatSelector
                 format={registerFormatKind}
                 sign={registerSign}

@@ -16,10 +16,11 @@ export async function fetchRegisters(
 }
 
 /**
- * Записать одно значение в регистр (coils или holding)
+ * Записать одно значение в регистр (coils, holding или input).
+ * Для input запись поддерживается только во внутреннем REST API симулятора.
  */
 export async function writeSingle(
-  kind: "coils" | "holding",
+  kind: "coils" | "holding" | "input",
   address: number,
   value: number
 ): Promise<RegisterRangeResponse> {
@@ -33,7 +34,7 @@ export async function writeSingle(
  * Пакетная запись регистров
  */
 export async function writeBatch(
-  kind: "coils" | "holding",
+  kind: "coils" | "holding" | "input",
   start: number,
   values: number[]
 ): Promise<RegisterRangeResponse> {

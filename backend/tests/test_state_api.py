@@ -36,6 +36,21 @@ def test_write_and_read_single_holding(client: TestClient) -> None:
     assert data2["values"][0] == 123
 
 
+def test_write_and_read_single_input_register(client: TestClient) -> None:
+    addr = 5
+    resp = client.put("/api/state/input", params={"start": addr, "value": 321})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["kind"] == "input"
+    assert data["values"][0] == 321
+
+    resp2 = client.get("/api/state/input", params={"start": addr, "count": 1})
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["kind"] == "input"
+    assert data2["values"][0] == 321
+
+
 def test_write_coil_as_bool(client: TestClient) -> None:
     addr = 0
     resp = client.put("/api/state/coils", params={"start": addr, "value": 1})
@@ -61,4 +76,17 @@ def test_batch_write_holding(client: TestClient) -> None:
     assert data["start"] == start
     assert data["values"] == values
 
+
+def test_batch_write_input_registers(client: TestClient) -> None:
+    start = 20
+    values = [100, 200, 300]
+    resp = client.put(
+        "/api/state/input/batch",
+        json={"start": start, "count": len(values), "values": values},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["kind"] == "input"
+    assert data["start"] == start
+    assert data["values"] == values
 

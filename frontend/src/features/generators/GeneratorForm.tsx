@@ -143,6 +143,21 @@ const GeneratorForm: React.FC<GeneratorFormProps> = ({ generator, chartSamples }
           </div>
 
           <div className="field">
+            <label className="field-label" htmlFor="gen-register-kind">
+              Область регистров
+            </label>
+            <select
+              id="gen-register-kind"
+              className="field-select"
+              value={generator.register_kind}
+              onChange={(e) => handleFieldChange("register_kind", e.target.value as any)}
+            >
+              <option value="holding">Holding Registers (03/06)</option>
+              <option value="input">Input Registers (04)</option>
+            </select>
+          </div>
+
+          <div className="field">
             <label className="field-label" htmlFor="gen-start-addr">
               Стартовый адрес
             </label>

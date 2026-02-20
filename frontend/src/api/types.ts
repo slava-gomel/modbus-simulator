@@ -33,7 +33,7 @@ export interface SignalGeneratorConfig {
   id: string;
   enabled: boolean;
   name?: string | null;
-  register_kind: "holding";
+  register_kind: "holding" | "input";
   start_address: number;
   register_count: number;
   data_type: SignalDataType;

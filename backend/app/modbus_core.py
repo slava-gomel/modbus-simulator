@@ -87,3 +87,24 @@ class ModbusSimulatorCore:
     def read_input_registers(self, address: int, count: int) -> list[int]:
         return self.input_registers.read(address, count)
 
+    def write_single_input_register(self, address: int, value: int) -> None:
+        """
+        Локальная запись в input‑регистры.
+
+        В Modbus протоколе FC04 формально только читает input‑регистры, но
+        для целей симулятора мы позволяем изменять их через REST API и
+        генераторы сигналов, чтобы мастер мог наблюдать изменяющиеся значения.
+        """
+        self.input_registers.write_single(address, value)
+
+    def write_multiple_input_registers(self, address: int, values: list[int]) -> None:
+        """
+        Пакетная запись в input‑регистры из REST/генераторов.
+
+        Используется только во внутреннем API симулятора, обычный Modbus
+        клиент по‑прежнему читает эти регистры через FC04.
+        """
+        count = len(values)
+        self.input_registers._check_range(address, count)
+        for idx, v in enumerate(values):
+            self.input_registers.write_single(address + idx, v)

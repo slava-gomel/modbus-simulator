@@ -66,9 +66,11 @@ async def write_single(
     start: int = Query(0, ge=0),
     value: int = Query(...),
 ) -> RegisterRangeResponse:
-    """
-    На первом этапе реализуем только одиночную запись (05/06),
-    выравниваясь по возможностям Modbus.
+    """Одиночная запись (05/06) поверх REST API.
+
+    Для целей симулятора поддерживаем также запись в input‑регистры, хотя
+    в самом протоколе Modbus FC04 является только read‑функцией. Это позволяет
+    управлять значениями input‑регистров из GUI и генераторов.
     """
     core = _get_core()
     try:
@@ -76,10 +78,12 @@ async def write_single(
             core.write_single_coil(start, value)
         elif kind == "holding":
             core.write_single_holding_register(start, value)
+        elif kind == "input":
+            core.write_single_input_register(start, value)
         else:
             raise HTTPException(
                 status_code=400,
-                detail="Write supported only for 'coils' and 'holding' at this stage",
+                detail="Write supported only for 'coils', 'holding' and 'input'",
             )
     except IndexError:
         raise HTTPException(status_code=400, detail="Address out of bounds") from None
@@ -91,8 +95,10 @@ async def write_single(
     # Вернём одно значение как диапазон длиной 1
     if kind == "coils":
         values = core.read_coils(start, 1)
-    else:
+    elif kind == "holding":
         values = core.read_holding_registers(start, 1)
+    else:
+        values = core.read_input_registers(start, 1)
     
     # WebSocket broadcast изменений
     if _ws_manager:
@@ -109,9 +115,7 @@ async def write_multiple(
     kind: RegisterKind,
     body: RegisterRangeRequest,
 ) -> RegisterRangeResponse:
-    """
-    Множественная запись (15/16) поверх REST API.
-    """
+    """Множественная запись (15/16) поверх REST API."""
     core = _get_core()
     start = body.start
     values = body.values
@@ -124,11 +128,10 @@ async def write_multiple(
             core.write_multiple_coils(start, values)
         elif kind == "holding":
             core.write_multiple_holding_registers(start, values)
+        elif kind == "input":
+            core.write_multiple_input_registers(start, values)
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Batch write supported only for 'coils' and 'holding'",
-            )
+            raise HTTPException(status_code=400, detail="Batch write supported for coils/holding/input only")
     except IndexError:
         raise HTTPException(status_code=400, detail="Address range out of bounds") from None
 
@@ -140,8 +143,10 @@ async def write_multiple(
     read_count = len(values)
     if kind == "coils":
         read_back = core.read_coils(start, read_count)
-    else:
+    elif kind == "holding":
         read_back = core.read_holding_registers(start, read_count)
+    else:
+        read_back = core.read_input_registers(start, read_count)
     
     # WebSocket broadcast изменений
     if _ws_manager:

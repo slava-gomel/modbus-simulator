@@ -119,13 +119,6 @@ const RegistersToolbar: React.FC<RegistersToolbarProps> = ({
             </button>
           </>
         )}
-        <button
-          type="button"
-          className="btn btn-sm btn-icon"
-          onClick={onReload}
-        >
-          Обновить
-        </button>
       </div>
     </div>
   );

@@ -39,8 +39,9 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
         <thead>
           <tr className="registers-header-row">
             <th>Имя</th>
-            <th>Тип</th>
+            <th>Тип сигнала</th>
             <th>Формат</th>
+            <th>Область</th>
             <th>Адрес</th>
             <th>График</th>
             <th>Значение</th>
@@ -55,6 +56,7 @@ const GeneratorsList: React.FC<GeneratorsListProps> = ({
               <td>{g.name || g.id}</td>
               <td>{g.wave_type}</td>
               <td>{g.data_type}</td>
+              <td>{g.register_kind === "holding" ? "Holding (03/06)" : "Input (04)"}</td>
               <td>{g.start_address}</td>
               <td>
                 <WaveChart

@@ -150,7 +150,7 @@ api/
 ```
 shared/
 ├── components/     # UI primitives (Button, Input, RadioGroup)
-├── hooks/          # Custom hooks (usePolling, useApiCall)
+├── hooks/          # Custom hooks (useWebSocket, useApiCall)
 ├── types/          # TypeScript типы
 └── constants.ts    # Константы приложения
 ```
@@ -158,7 +158,7 @@ shared/
 ### Data Flow
 
 ```
-User Action → Context → API Call → Backend
+User Action → Context → API Call/WebSocket → Backend
                 ↓
             Local State Update
                 ↓
@@ -172,20 +172,17 @@ User Action → Context → API Call → Backend
 - Централизованный error handling
 - Базовая авторизация через interceptors
 
-### Polling механизм
+### WebSocket real-time
 ```typescript
-usePolling(callback, interval)
+useWebSocket(channel, handler)
   ↓
-  Periodic fetch → Update Context → Re-render
+  Push-события → Update Context → Re-render
 ```
 
 Используется для:
-- Обновления регистров (1000ms)
-- Статуса сервера (500ms)
-- Значений генераторов (500ms)
-
-### WebSocket (будущее улучшение)
-Заменит polling для real-time обновлений регистров и Modbus событий.
+- Мгновенных обновлений регистров (`/ws/registers`, события `registers_changed`)
+- Статуса сервера (`/ws/server`)
+- Значений генераторов (`/ws/generators`, события `generator_values`)
 
 ## Persistence модель
 
