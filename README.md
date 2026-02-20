@@ -1,45 +1,76 @@
-## modbud_simulator – Modbus TCP Simulator с WEB GUI
+# Modbus TCP Simulator
 
-Симулятор Modbus TCP slave с WEB-интерфейсом для конфигурирования и наблюдения за регистрами.
+Симулятор Modbus TCP slave с современным WEB-интерфейсом для конфигурирования, наблюдения за регистрами и генерации тестовых сигналов.
+
+![Общий вид приложения](docs/screenshots/01-overview.png)
 
 ## Содержание
 
 - [Возможности](#возможности)
+- [Скриншоты](#скриншоты)
 - [Быстрый старт](#быстрый-старт)
 - [Документация](#документация)
 - [Разработка](#разработка)
 - [Тестирование](#тестирование)
+- [Авторизация](#авторизация-опционально)
 
 ## Возможности
 
-### Backend (FastAPI + pymodbus)
-- Modbus TCP slave (функции 01–06, 15/16)
-- Запуск/остановка сервера через API
-- Хранение конфигурации и состояния в файлах
-- Модульная архитектура storage
+### Modbus TCP Slave (Backend)
+- Функции **01–06, 15/16** (coils, discrete inputs, holding registers, input registers)
+- Запуск/остановка сервера через API и GUI
+- Хранение конфигурации и состояния в YAML/JSON файлах
+- Модульная архитектура storage (config, state, profiles)
+- **WebSocket real-time:** мгновенные обновления регистров, статуса сервера и генераторов
 
 ### WEB GUI (React + TypeScript)
-- Конфигурация Modbus параметров
-- Просмотр и редактирование регистров (coils, discrete inputs, holding, input)
-- Форматы отображения: INT16/32/64, FLOAT32/64, BITMAP
-- Пакетная запись и пресеты
+- Конфигурация Modbus параметров (host, port, unit ID, размер регистров)
+- Просмотр и редактирование регистров в реальном времени
+- Форматы отображения: **INT16/32/64, FLOAT32/64, BITMAP**
+- Пакетная запись, пресеты (нули, случайные значения)
 - Управление профилями конфигураций
-- Журнал событий Modbus
-- Feature-based архитектура с React Context API
+- Журнал событий Modbus с фильтрами, поиском и цветными badge-ами
+- Toast-уведомления при всех операциях
+- Горячие клавиши (`?` — справка, `Ctrl+S` — сохранить, `Escape` — закрыть)
+- Адаптивный responsive layout
 
 ### Генератор сигналов
-- Фоновое обновление holding‑регистров
-- Типы сигналов: синус, пила, меандр, константа
+- Фоновое обновление holding/input-регистров по заданному сигналу
+- Типы сигналов: **синус, пила, меандр, константа**
 - Форматы: INT16, FLOAT32, FLOAT64
-- Настраиваемые параметры: амплитуда, частота, смещение
+- Настраиваемые параметры: амплитуда, частота, смещение, период обновления
 - Параллельная работа нескольких генераторов
+- Живой предпросмотр сигнала в форме создания
+- Неоновая подсветка генерируемых регистров (настраиваемый цвет)
 
 ### Профили
-- Сохранение конфигурации и состояния под именем
+- Сохранение полной конфигурации (config + state + генераторы) под именем
 - Комментарии к профилям
-- Привязка генераторов сигналов к профилям
-- Загрузка и удаление профилей
+- Загрузка, обновление и удаление профилей с подтверждением
 - Хранение в YAML файлах
+- Профиль `default` создаётся автоматически и защищён от удаления
+
+## Скриншоты
+
+### Основной интерфейс
+Панели настроек, регистров, генераторов и журнала событий. Статус сервера и текущий профиль отображаются в шапке.
+
+![Общий вид](docs/screenshots/01-overview.png)
+
+### Регистры, генератор и журнал
+Таблица регистров с данными, генератор сигналов с живым графиком и журнал событий Modbus.
+
+![Регистры и генераторы](docs/screenshots/02-generators-log.png)
+
+### Форма создания генератора
+Двухколоночный layout с параметрами сигнала слева и предпросмотром графика справа.
+
+![Форма генератора](docs/screenshots/03-generator-form.png)
+
+### Адаптивный layout
+На узких экранах панели выстраиваются вертикально: Настройки → Регистры → Генераторы → Журнал.
+
+![Responsive](docs/screenshots/04-responsive.png)
 
 ## Быстрый старт
 
@@ -50,10 +81,13 @@ docker compose up --build
 ```
 
 **Доступ:**
-- Backend API: `http://localhost:8000/api`
-- API Docs: `http://localhost:8000/docs`
-- WEB GUI: `http://localhost:3000`
-- Modbus TCP: `localhost:502`
+
+| Сервис | URL |
+|--------|-----|
+| WEB GUI | `http://localhost:8080` |
+| Backend API | `http://localhost:8000/api` |
+| API Docs (Swagger) | `http://localhost:8000/docs` |
+| Modbus TCP | `localhost:1502` |
 
 ### Локальная разработка
 
@@ -75,119 +109,127 @@ Frontend: `http://localhost:5173`, API прокси `/api` → `http://localhost
 
 ## Документация
 
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Архитектура проекта, структура модулей, data flow
-- **[CONTRIBUTING.md](./CONTRIBUTING.md)** — Руководство для разработчиков, code style, git workflow
-- **[docs/API.md](./docs/API.md)** — Полная REST API документация
-- **[TESTING.md](./TESTING.md)** — Руководство по тестированию (backend + frontend)
-- **[DOCKER_REBUILD.md](./DOCKER_REBUILD.md)** — Инструкции по пересборке Docker после изменений
-- **[DOCKER_TEST_RESULTS.md](./DOCKER_TEST_RESULTS.md)** — Результаты тестирования в Docker окружении
+| Документ | Описание |
+|----------|----------|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Архитектура проекта, структура модулей, data flow |
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Руководство для разработчиков, code style, git workflow |
+| [docs/API.md](./docs/API.md) | Полная REST + WebSocket API документация |
+| [TESTING.md](./TESTING.md) | Руководство по тестированию (backend + frontend) |
+| [DOCKER_REBUILD.md](./DOCKER_REBUILD.md) | Инструкции по пересборке Docker после изменений |
 
 ### Структура проекта
 
 ```
 modbud_simulator/
-├── frontend/               # React + TypeScript
+├── frontend/                  # React 18 + TypeScript + Vite
 │   ├── src/
-│   │   ├── api/           # Модульные API клиенты
-│   │   ├── features/      # Feature-based modules
-│   │   ├── shared/        # Переиспользуемые компоненты
-│   │   └── App.tsx
+│   │   ├── api/              # Модульные API клиенты (axios)
+│   │   ├── features/         # Feature-based модули
+│   │   │   ├── auth/         # Авторизация
+│   │   │   ├── config/       # Конфигурация сервера
+│   │   │   ├── server/       # Управление Modbus сервером
+│   │   │   ├── profiles/     # Профили конфигураций
+│   │   │   ├── registers/    # Регистры (таблица, конвертеры)
+│   │   │   ├── generators/   # Генераторы сигналов
+│   │   │   ├── logs/         # Журнал событий
+│   │   │   └── websocket/    # WebSocket коммуникация
+│   │   ├── shared/           # Переиспользуемые компоненты и хуки
+│   │   └── App.tsx           # Композиция (~165 строк)
 │   └── Dockerfile
-├── backend/               # FastAPI + Python
+├── backend/                   # FastAPI + Python 3.10+
 │   ├── app/
-│   │   ├── api/          # API endpoints
-│   │   ├── storage/      # Модульное хранилище
-│   │   ├── modbus_core.py
-│   │   └── main.py
+│   │   ├── api/              # REST API endpoints
+│   │   ├── storage/          # Модульное хранилище (config/state/profiles)
+│   │   ├── modbus_core.py    # Доменное ядро Modbus
+│   │   ├── modbus_server.py  # Адаптер pymodbus
+│   │   ├── signal_generators.py  # Движок генераторов
+│   │   └── main.py           # FastAPI app + lifespan
 │   └── Dockerfile
-├── docs/                  # Документация
-│   └── API.md
-├── ARCHITECTURE.md        # Архитектура системы
-├── CONTRIBUTING.md        # Руководство разработчика
+├── docs/                      # Документация
+│   ├── API.md
+│   └── screenshots/          # Скриншоты GUI
+├── memory-bank/               # Memory Bank (проектная документация)
+├── ARCHITECTURE.md
+├── CONTRIBUTING.md
 └── docker-compose.yml
 ```
 
 ## Разработка
 
-### Frontend
+### Технологии
 
-**Технологии:**
-- React 18 + TypeScript
-- Vite для dev сервера и сборки
-- Axios для API запросов
-- React Context API для state management
+**Frontend:**
+- React 18 + TypeScript (strict mode)
+- Vite — сборка и dev-server
+- Axios — HTTP клиент
+- WebSocket API — real-time обновления
+- React Context API — state management
+- @heroicons/react — SVG иконки
+- Sonner — toast уведомления
 
-**Архитектура:**
-- Feature-based структура (`features/`)
-- Shared UI компоненты (`shared/components/`)
-- Custom hooks (`usePolling`, `useApiCall`)
-- Модульная API (`api/registers.ts`, `api/generators.ts`, и т.д.)
+**Backend:**
+- FastAPI + Uvicorn
+- Pymodbus 3.6.x — Modbus TCP
+- Pydantic v2 — валидация и схемы
+- YAML/JSON — файловое хранилище
+- Threading — фоновые генераторы сигналов
 
-### Backend
+### Архитектура
 
-**Технологии:**
-- FastAPI
-- Pymodbus для Modbus TCP
-- YAML/JSON для storage
-- Threading для генераторов сигналов
+**Frontend** — feature-based модульная архитектура:
+- Каждая feature = Context (state + logic) + UI компоненты
+- Shared UI: Button, Input, ToggleSwitch, ConfirmDialog, Skeleton, ShortcutsHelp
+- Custom hooks: useWebSocket, useCollapse, useApiCall, useKeyboardShortcuts
+- Модульная API: client.ts + доменные модули (registers, generators, profiles, server)
 
-**Архитектура:**
-- Модульная storage система (`storage/config.py`, `storage/state.py`, `storage/profiles.py`)
-- Dependency injection через init функции
-- Type hints (PEP 484)
-- Structured logging
+**Backend** — модульная архитектура:
+- `ModbusSimulatorCore` — чистое доменное ядро
+- `modbus_server` — адаптер pymodbus
+- `storage/` — модульное хранилище (SRP: config, state, profiles)
+- `signal_generators` — движок генераторов в фоновом потоке
 
 ### Code Style
 
-**Frontend:**
-- TypeScript strict mode
-- React.FC для компонентов
-- Именование: PascalCase (компоненты), camelCase (функции/переменные)
+**Frontend:** TypeScript strict, React.FC, PascalCase (компоненты), camelCase (функции)
 
-**Backend:**
-- PEP 8 style guide
-- Type hints для всех функций
-- Google-style docstrings
+**Backend:** PEP 8, type hints, Google-style docstrings, ruff (линтинг)
 
 См. [CONTRIBUTING.md](./CONTRIBUTING.md) для деталей.
 
 ## Тестирование
 
+**Всего: 157 тестов (backend 102, frontend 55) — все проходят.**
+
 ### Backend
 
 ```bash
 cd backend
-pip install -e .[dev]  # Установить зависимости для тестов
+pip install -e .[dev]
 pytest tests/ -v
-pytest --cov=app  # С покрытием кода
+pytest --cov=app
 ```
 
-**Покрытие:** 94 теста (health, state, server, profiles, generators, encoding_utils, **modbus_core, modbus_integration**)
+Покрытие: health, state API, server API, profiles API, generators API, encoding_utils, modbus_core (41 тест), modbus_integration (18 тестов).
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install  # Установить зависимости для тестов
+npm install
 npm test
-npm run test:ui  # UI интерфейс
-npm run test:coverage  # С покрытием кода
+npm run test:coverage
 ```
 
-**Покрытие:** 54 теста (converters, usePolling, useCollapse)
+Покрытие: converters (все форматы), useCollapse, WebSocketContext.
 
 ### Docker
 
 ```bash
-# Backend тесты (важно: использовать python -m pytest)
 docker compose run --rm backend python -m pytest tests/ -v
-
-# Frontend тесты (используется профиль testing)
 docker compose --profile testing run --rm frontend-test
 ```
 
-**Статистика Docker тестов:** 146/148 прошли (98.6%)  
-См. [TESTING.md](./TESTING.md) и [DOCKER_TEST_RESULTS.md](./DOCKER_TEST_RESULTS.md) для подробностей.
+См. [TESTING.md](./TESTING.md) для подробностей.
 
 ## Авторизация (опционально)
 
@@ -202,17 +244,17 @@ environment:
 
 Без этих переменных авторизация не требуется.
 
-## Производство
+## Production
 
-**Рекомендации для production:**
+**Рекомендации:**
 
 1. Настройте CORS whitelist в `backend/app/main.py`
 2. Используйте переменные окружения для конфигурации
 3. Настройте volume для `/app/data` для persistence
-4. Добавьте nginx reverse proxy для rate limiting
+4. Добавьте nginx reverse proxy с rate limiting
 5. Включите HTTPS
 
-См. [ARCHITECTURE.md](./ARCHITECTURE.md#deployment) для деталей.
+См. [ARCHITECTURE.md](./ARCHITECTURE.md) для деталей.
 
 ## Лицензия
 
@@ -221,10 +263,3 @@ MIT
 ## Contributing
 
 Contributions welcome! См. [CONTRIBUTING.md](./CONTRIBUTING.md) для начала работы.
-
-## Поддержка
-
-- Issues: GitHub Issues
-- Документация: См. `/docs` и `ARCHITECTURE.md`
-
-
